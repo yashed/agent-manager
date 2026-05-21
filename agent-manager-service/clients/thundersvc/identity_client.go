@@ -439,11 +439,28 @@ func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (
 	if err != nil {
 		return nil, fmt.Errorf("thunder get role assignments: %w", err)
 	}
-	var assignments RoleAssignments
-	if err := json.Unmarshal(body, &assignments); err != nil {
+	var resp thunderRoleAssignmentList
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("thunder get role assignments decode: %w", err)
 	}
-	return &assignments, nil
+	result := &RoleAssignments{}
+	for _, a := range resp.Assignments {
+		switch a.Type {
+		case "user":
+			user, err := c.GetUser(ctx, a.ID)
+			if err != nil {
+				continue
+			}
+			result.Users = append(result.Users, *user)
+		case "group":
+			group, err := c.GetGroup(ctx, a.ID)
+			if err != nil {
+				continue
+			}
+			result.Groups = append(result.Groups, *group)
+		}
+	}
+	return result, nil
 }
 
 func (c *thunderClient) AddRolePermissions(ctx context.Context, roleID string, req RolePermissionRequest) error {

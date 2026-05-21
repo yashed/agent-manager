@@ -65,10 +65,10 @@ type IdentityController interface {
 }
 
 type identityController struct {
-	client      thundersvc.IdentityClient
-	rootOUOnce  sync.Once
-	rootOUID    string
-	rootOUErr   error
+	client     thundersvc.IdentityClient
+	rootOUOnce sync.Once
+	rootOUID   string
+	rootOUErr  error
 }
 
 // NewIdentityController creates a new identity controller.
@@ -134,10 +134,10 @@ func (c *identityController) CreateUser(w http.ResponseWriter, r *http.Request) 
 	log := logger.GetLogger(ctx)
 
 	var body struct {
-		Username   string                   `json:"username"`
-		Type       string                   `json:"type"`
+		Username   string                    `json:"username"`
+		Type       string                    `json:"type"`
 		Claims     []thundersvc.ThunderClaim `json:"claims,omitempty"`
-		Credential thundersvc.ThunderCred   `json:"credential"`
+		Credential thundersvc.ThunderCred    `json:"credential"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
@@ -653,8 +653,8 @@ func (c *identityController) AddRoleAssignees(w http.ResponseWriter, r *http.Req
 	log := logger.GetLogger(ctx)
 	roleID := r.PathValue(utils.PathParamRoleID)
 
-	var req thundersvc.RoleAssignmentsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req, err := decodeRoleAssigneeRequest(r)
+	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -676,8 +676,8 @@ func (c *identityController) RemoveRoleAssignees(w http.ResponseWriter, r *http.
 	log := logger.GetLogger(ctx)
 	roleID := r.PathValue(utils.PathParamRoleID)
 
-	var req thundersvc.RoleAssignmentsRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	req, err := decodeRoleAssigneeRequest(r)
+	if err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
@@ -692,6 +692,26 @@ func (c *identityController) RemoveRoleAssignees(w http.ResponseWriter, r *http.
 		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, struct{}{})
+}
+
+// decodeRoleAssigneeRequest converts the frontend { userIds, groupIds } payload
+// into the Thunder { assignments: [{type, id}] } format.
+func decodeRoleAssigneeRequest(r *http.Request) (thundersvc.RoleAssignmentsRequest, error) {
+	var body struct {
+		UserIDs  []string `json:"userIds"`
+		GroupIDs []string `json:"groupIds"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		return thundersvc.RoleAssignmentsRequest{}, err
+	}
+	var entries []thundersvc.AssignmentEntry
+	for _, id := range body.UserIDs {
+		entries = append(entries, thundersvc.AssignmentEntry{ID: id, Type: "user"})
+	}
+	for _, id := range body.GroupIDs {
+		entries = append(entries, thundersvc.AssignmentEntry{ID: id, Type: "group"})
+	}
+	return thundersvc.RoleAssignmentsRequest{Assignments: entries}, nil
 }
 
 // --- Permissions catalog ---

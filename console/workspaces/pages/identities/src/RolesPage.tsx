@@ -27,7 +27,7 @@ import {
   TablePagination,
   Tooltip,
 } from "@wso2/oxygen-ui";
-import { Plus, Shield, Trash } from "@wso2/oxygen-ui-icons-react";
+import { Edit, Plus, Shield, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteRole,
@@ -55,14 +55,14 @@ export const RolesPage: React.FC = () => {
   const roles = useMemo(() => data?.roles ?? [], [data]);
   const total = data?.total ?? 0;
 
-  const createPath = orgId
-    ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { roles: { path: string } } };
-        }).identities.children.roles.path + "/create",
-        { orgId },
-      )
-    : "#";
+  const rolesBasePath = (absoluteRouteMap.children.org.children as unknown as {
+    identities: { children: { roles: { path: string } } };
+  }).identities.children.roles.path;
+
+  const createPath = orgId ? generatePath(rolesBasePath + "/create", { orgId }) : "#";
+
+  const editRolePath = (roleId: string) =>
+    orgId ? generatePath(rolesBasePath + "/:roleId/edit", { orgId, roleId }) : "#";
 
   const handleDelete = (role: ThunderRole) => {
     addConfirmation({
@@ -125,11 +125,18 @@ export const RolesPage: React.FC = () => {
                   <ListingTable.Cell>{role.name}</ListingTable.Cell>
                   <ListingTable.Cell>{role.description ?? "-"}</ListingTable.Cell>
                   <ListingTable.Cell align="right">
-                    <Tooltip title="Delete role">
-                      <IconButton size="small" onClick={() => handleDelete(role)}>
-                        <Trash size={16} />
-                      </IconButton>
-                    </Tooltip>
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <Tooltip title="Edit role">
+                        <IconButton size="small" onClick={() => navigate(editRolePath(role.id))}>
+                          <Edit size={16} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete role">
+                        <IconButton size="small" onClick={() => handleDelete(role)}>
+                          <Trash size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </ListingTable.Cell>
                 </ListingTable.Row>
               ))}

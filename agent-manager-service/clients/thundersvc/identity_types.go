@@ -173,6 +173,11 @@ type thunderGroupMemberList struct {
 	Members      []GroupMember `json:"members"`
 }
 
+// thunderRoleAssignmentList decodes the GET /roles/{id}/assignments response.
+type thunderRoleAssignmentList struct {
+	Assignments []AssignmentEntry `json:"assignments"`
+}
+
 // thunderGroupList is used to decode paginated group list responses.
 type thunderGroupList struct {
 	Groups       []ThunderGroup `json:"groups"`

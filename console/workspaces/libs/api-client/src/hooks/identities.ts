@@ -279,6 +279,7 @@ export function useGetRoleAssignments(params: RolePathParams) {
     queryKey: ['identity-role-assignments', params],
     queryFn: () => getRoleAssignments(params, getToken),
     enabled: !!params.orgName && !!params.roleId,
+    refetchOnMount: 'always',
   });
 }
 
@@ -312,8 +313,8 @@ export function useAddRoleAssignees() {
   return useApiMutation<void, unknown, { params: RolePathParams; body: RoleUserGroupRequest }>({
     action: { verb: 'update', target: 'role assignments' },
     mutationFn: ({ params, body }) => addRoleAssignees(params, body, getToken),
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments', params] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments'] });
     },
   });
 }
@@ -324,8 +325,8 @@ export function useRemoveRoleAssignees() {
   return useApiMutation<void, unknown, { params: RolePathParams; body: RoleUserGroupRequest }>({
     action: { verb: 'update', target: 'role assignments' },
     mutationFn: ({ params, body }) => removeRoleAssignees(params, body, getToken),
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments', params] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments'] });
     },
   });
 }

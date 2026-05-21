@@ -23,6 +23,7 @@ import { UserInvitePage } from "./UserInvitePage";
 import { UserEditPage } from "./UserEditPage";
 import { RolesPage } from "./RolesPage";
 import { RoleCreatePage } from "./RoleCreatePage";
+import { RoleEditPage } from "./RoleEditPage";
 import { GroupsPage } from "./GroupsPage";
 import { GroupCreatePage } from "./GroupCreatePage";
 import { GroupEditPage } from "./GroupEditPage";
@@ -48,6 +49,7 @@ export const IdentitiesOrganization: React.FC = () => {
       <Route path="users/:userId/edit" element={<UserEditPage />} />
       <Route path="users/*" element={<UsersPage />} />
       <Route path="roles/create" element={<RoleCreatePage />} />
+      <Route path="roles/:roleId/edit" element={<RoleEditPage />} />
       <Route path="roles/*" element={<RolesPage />} />
       <Route path="groups/create" element={<GroupCreatePage />} />
       <Route path="groups/:groupId/edit" element={<GroupEditPage />} />

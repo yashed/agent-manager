@@ -266,9 +266,9 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	agentConfigurationController := controllers.NewAgentConfigurationController(agentConfigurationService)
 	gitSecretService := services.NewGitSecretService(openChoreoClient)
 	gitSecretController := controllers.NewGitSecretController(gitSecretService)
-	thunderConfig2 := ProvideThunderConfig(configConfig)
-	identityClient2 := ProvideIdentityClient(thunderConfig2)
-	identityController2 := controllers.NewIdentityController(identityClient2)
+	thunderConfig := ProvideThunderConfig(configConfig)
+	identityClient := ProvideIdentityClient(thunderConfig)
+	identityController := controllers.NewIdentityController(identityClient)
 	monitorSchedulerService := services.NewMonitorSchedulerService(openChoreoClient, publisherCredentialProvisioner, logger, monitorExecutor, monitorRepository)
 	traceObserverSvcClient := ProvideTestTraceObserverClient(testClients)
 	appParams := &AppParams{
@@ -296,7 +296,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 		CatalogController:                catalogController,
 		AgentConfigurationController:     agentConfigurationController,
 		GitSecretController:              gitSecretController,
-		IdentityController:               identityController2,
+		IdentityController:               identityController,
 		MonitorScheduler:                 monitorSchedulerService,
 		LLMTemplateStore:                 llmTemplateStore,
 		InfraResourceManager:             infraResourceManager,
