@@ -178,6 +178,7 @@ export function useAddGroupMembers() {
     mutationFn: ({ params, body }) => addGroupMembers(params, body, getToken),
     onSuccess: (_data, { params }) => {
       queryClient.invalidateQueries({ queryKey: ['identity-group-members', params] });
+      queryClient.invalidateQueries({ queryKey: ['identity-user-groups'] });
     },
   });
 }
@@ -190,6 +191,7 @@ export function useRemoveGroupMembers() {
     mutationFn: ({ params, body }) => removeGroupMembers(params, body, getToken),
     onSuccess: (_data, { params }) => {
       queryClient.invalidateQueries({ queryKey: ['identity-group-members', params] });
+      queryClient.invalidateQueries({ queryKey: ['identity-user-groups'] });
     },
   });
 }

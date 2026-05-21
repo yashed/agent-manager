@@ -20,6 +20,7 @@ import { Navigate, Route, Routes, useParams, generatePath } from "react-router-d
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { UsersPage } from "./UsersPage";
 import { UserInvitePage } from "./UserInvitePage";
+import { UserEditPage } from "./UserEditPage";
 import { RolesPage } from "./RolesPage";
 import { RoleCreatePage } from "./RoleCreatePage";
 import { GroupsPage } from "./GroupsPage";
@@ -43,6 +44,7 @@ export const IdentitiesOrganization: React.FC = () => {
         }
       />
       <Route path="users/invite" element={<UserInvitePage />} />
+      <Route path="users/:userId/edit" element={<UserEditPage />} />
       <Route path="users/*" element={<UsersPage />} />
       <Route path="roles/create" element={<RoleCreatePage />} />
       <Route path="roles/*" element={<RolesPage />} />

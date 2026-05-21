@@ -177,7 +177,7 @@ func (c *identityController) CreateUser(w http.ResponseWriter, r *http.Request) 
 
 	user, err := c.client.CreateUser(ctx, req)
 	if err != nil {
-		log.Error("CreateUser failed", "username", body.Username, "error", err)
+		log.Error("CreateUser failed", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
@@ -261,7 +261,7 @@ func (c *identityController) InviteUser(w http.ResponseWriter, r *http.Request) 
 
 	inviteLink, err := c.client.InviteUser(ctx, body.Email)
 	if err != nil {
-		log.Error("InviteUser failed", "email", body.Email, "error", err)
+		log.Error("InviteUser failed", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to invite user")
 		return
 	}

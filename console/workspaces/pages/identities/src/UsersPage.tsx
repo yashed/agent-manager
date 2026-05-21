@@ -27,7 +27,7 @@ import {
   TablePagination,
   Tooltip,
 } from "@wso2/oxygen-ui";
-import { Plus, Trash, Users } from "@wso2/oxygen-ui-icons-react";
+import { Edit, Plus, Trash, Users } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteUser,
@@ -55,14 +55,18 @@ export const UsersPage: React.FC = () => {
   const users = useMemo(() => data?.users ?? [], [data]);
   const total = data?.total ?? 0;
 
+  const identitiesRoute = (absoluteRouteMap.children.org.children as unknown as {
+    identities: { children: { users: { path: string } } };
+  }).identities;
+
   const invitePath = orgId
-    ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { users: { path: string } } };
-        }).identities.children.users.path + "/invite",
-        { orgId },
-      )
+    ? generatePath(identitiesRoute.children.users.path + "/invite", { orgId })
     : "#";
+
+  const editUserPath = (userId: string) =>
+    orgId
+      ? generatePath(identitiesRoute.children.users.path + "/:userId/edit", { orgId, userId })
+      : "#";
 
   const handleDelete = (user: ThunderUser) => {
     addConfirmation({
@@ -128,11 +132,18 @@ export const UsersPage: React.FC = () => {
                   <ListingTable.Cell>{getAttr(user, "username")}</ListingTable.Cell>
                   <ListingTable.Cell>{user.id}</ListingTable.Cell>
                   <ListingTable.Cell align="right">
-                    <Tooltip title="Delete user">
-                      <IconButton size="small" onClick={() => handleDelete(user)}>
-                        <Trash size={16} />
-                      </IconButton>
-                    </Tooltip>
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <Tooltip title="Edit user">
+                        <IconButton size="small" onClick={() => navigate(editUserPath(user.id))}>
+                          <Edit size={16} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete user">
+                        <IconButton size="small" onClick={() => handleDelete(user)}>
+                          <Trash size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </ListingTable.Cell>
                 </ListingTable.Row>
               ))}
