@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -35,8 +35,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap } from "@agent-management-platform/types";
-import type { ThunderUser } from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderUser } from "@agent-management-platform/types";
 
 export const UsersPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -55,6 +54,15 @@ export const UsersPage: React.FC = () => {
   const users = useMemo(() => data?.users ?? [], [data]);
   const total = data?.total ?? 0;
 
+  useEffect(() => {
+    if (users.length === 0 && total > 0) {
+      const lastPage = Math.max(0, Math.ceil(total / rowsPerPage) - 1);
+      if (page !== lastPage) {
+        setPage(lastPage);
+      }
+    }
+  }, [users.length, total, page, rowsPerPage]);
+
   const identitiesRoute = (absoluteRouteMap.children.org.children as unknown as {
     identities: { children: { users: { path: string } } };
   }).identities;
@@ -68,6 +76,9 @@ export const UsersPage: React.FC = () => {
       ? generatePath(identitiesRoute.children.users.path + "/:userId/edit", { orgId, userId })
       : "#";
 
+  const getAttr = (user: ThunderUser, key: string) =>
+    String(user.attributes?.[key] ?? "");
+
   const handleDelete = (user: ThunderUser) => {
     addConfirmation({
       title: "Delete User",
@@ -78,9 +89,6 @@ export const UsersPage: React.FC = () => {
       onConfirm: () => deleteUser({ orgName: orgId, userId: user.id }),
     });
   };
-
-  const getAttr = (user: ThunderUser, key: string) =>
-    String(user.attributes?.[key] ?? "");
 
   if (isLoading) {
     return (
@@ -111,7 +119,7 @@ export const UsersPage: React.FC = () => {
       </Stack>
 
       <ListingTable.Container>
-        {users.length === 0 ? (
+        {total === 0 ? (
           <ListingTable.EmptyState
             illustration={<Users size={64} />}
             title="No users yet"
@@ -150,7 +158,7 @@ export const UsersPage: React.FC = () => {
             </ListingTable.Body>
           </ListingTable>
         )}
-        {users.length > 0 && (
+        {total > 0 && (
           <TablePagination
             component="div"
             count={total}

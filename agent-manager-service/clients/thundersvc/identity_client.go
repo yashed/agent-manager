@@ -312,7 +312,7 @@ func (c *thunderClient) GetGroupMembers(ctx context.Context, groupID string, off
 		}
 		user, err := c.GetUser(ctx, m.ID)
 		if err != nil {
-			continue
+			return nil, 0, fmt.Errorf("thunder get group member %s: %w", m.ID, err)
 		}
 		users = append(users, *user)
 	}
@@ -339,7 +339,7 @@ func (c *thunderClient) GetGroupRoles(ctx context.Context, groupID string) ([]Th
 	for _, role := range allRoles {
 		assignments, err := c.GetRoleAssignments(ctx, role.ID)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("thunder get group roles (assignments for role %s): %w", role.ID, err)
 		}
 		for _, g := range assignments.Groups {
 			if g.ID == groupID {
@@ -449,13 +449,13 @@ func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (
 		case "user":
 			user, err := c.GetUser(ctx, a.ID)
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("thunder get role assignment user %s: %w", a.ID, err)
 			}
 			result.Users = append(result.Users, *user)
 		case "group":
 			group, err := c.GetGroup(ctx, a.ID)
 			if err != nil {
-				continue
+				return nil, fmt.Errorf("thunder get role assignment group %s: %w", a.ID, err)
 			}
 			result.Groups = append(result.Groups, *group)
 		}
@@ -714,7 +714,10 @@ func (c *thunderClient) doRequest(ctx context.Context, method, url, token string
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response body: %w", err)
+	}
 
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, &NotFoundError{Message: string(body)}

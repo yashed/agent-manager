@@ -26,11 +26,10 @@ import {
   Stack,
   TextField,
 } from "@wso2/oxygen-ui";
-import { useNavigate, useParams } from "react-router-dom";
+import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
 import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
-import { generatePath } from "react-router-dom";
 
 export const UserCreatePage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -69,17 +68,20 @@ export const UserCreatePage: React.FC = () => {
       { type: "family_name", value: familyName.trim() },
     ].filter((c) => c.value);
 
-    await createUser({
-      params: { orgName: orgId },
-      body: {
-        username: username.trim(),
-        type: "engineer",
-        claims: optionalClaims,
-        credential: { password },
-      },
-    });
-
-    navigate(usersPath);
+    try {
+      await createUser({
+        params: { orgName: orgId },
+        body: {
+          username: username.trim(),
+          type: "engineer",
+          claims: optionalClaims,
+          credential: { password },
+        },
+      });
+      navigate(usersPath);
+    } catch {
+      // createError state is set by React Query and displayed in the Alert above
+    }
   };
 
   return (

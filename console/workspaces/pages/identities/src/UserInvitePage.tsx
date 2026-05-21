@@ -69,11 +69,15 @@ export const UserInvitePage: React.FC = () => {
     }
     setEmailError(undefined);
 
-    const result = await inviteUser({
-      params: { orgName: orgId },
-      body: { email: email.trim() },
-    });
-    setInviteLink(result.inviteLink);
+    try {
+      const result = await inviteUser({
+        params: { orgName: orgId },
+        body: { email: email.trim() },
+      });
+      setInviteLink(result.inviteLink);
+    } catch {
+      // inviteError state is set by React Query and displayed in the Alert above
+    }
   };
 
   const handleCopy = async () => {
@@ -140,7 +144,8 @@ export const UserInvitePage: React.FC = () => {
             <Form.Header>Invitation Created</Form.Header>
             <Form.Stack spacing={2}>
               <Alert severity="success">
-                An invitation has been created for <strong>{email}</strong>. Share the link below with the user to complete registration.
+                An invitation has been created for <strong>{email}</strong>.{" "}
+                Share the link below with the user to complete registration.
               </Alert>
 
               <Box>

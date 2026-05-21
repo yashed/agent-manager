@@ -27,7 +27,8 @@ import {
   listAMPPermissions,
 } from "../apis";
 import type {
-  ThunderUserListResponse, ThunderUser, CreateUserRequest, InviteUserRequest, InviteUserResponse, UpdateUserRequest,
+  ThunderUserListResponse, ThunderUser,
+  CreateUserRequest, InviteUserRequest, InviteUserResponse, UpdateUserRequest,
   ThunderGroupListResponse, ThunderGroup, CreateGroupRequest, UpdateGroupRequest,
   ThunderRoleListResponse, ThunderRole, ThunderRoleAssignments,
   CreateRoleRequest, UpdateRoleRequest, RolePermissionRequest, RoleUserGroupRequest,
@@ -39,11 +40,34 @@ import { useApiMutation, useApiQuery } from "./react-query-notifications";
 
 // --- Users ---
 
-export function useListUsers(params: IdentityOrgPathParams, query?: { offset?: number; limit?: number }) {
+export function useListUsers(
+  params: IdentityOrgPathParams,
+  query?: { offset?: number; limit?: number },
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<ThunderUserListResponse>({
     queryKey: ['identity-users', params, query],
     queryFn: () => listUsers(params, query, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+export function useAllUsers(params: IdentityOrgPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<{ users: ThunderUser[] }>({
+    queryKey: ['identity-users-all', params],
+    queryFn: async () => {
+      const PAGE_SIZE = 100;
+      let offset = 0;
+      let all: ThunderUser[] = [];
+      while (true) {
+        const page = await listUsers(params, { offset, limit: PAGE_SIZE }, getToken);
+        all = all.concat(page.users);
+        if (all.length >= page.total || page.users.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+      return { users: all };
+    },
     enabled: !!params.orgName,
   });
 }
@@ -60,18 +84,23 @@ export function useGetUser(params: UserPathParams) {
 export function useCreateUser() {
   const { getToken } = useAuthHooks();
   const queryClient = useQueryClient();
-  return useApiMutation<ThunderUser, unknown, { params: IdentityOrgPathParams; body: CreateUserRequest }>({
+  return useApiMutation<
+    ThunderUser, unknown, { params: IdentityOrgPathParams; body: CreateUserRequest }
+  >({
     action: { verb: 'create', target: 'user' },
     mutationFn: ({ params, body }) => createUser(params, body, getToken),
     onSuccess: (_data, { params }) => {
       queryClient.invalidateQueries({ queryKey: ['identity-users', params] });
+      queryClient.invalidateQueries({ queryKey: ['identity-users-all', params] });
     },
   });
 }
 
 export function useInviteUser() {
   const { getToken } = useAuthHooks();
-  return useApiMutation<InviteUserResponse, unknown, { params: IdentityOrgPathParams; body: InviteUserRequest }>({
+  return useApiMutation<
+    InviteUserResponse, unknown, { params: IdentityOrgPathParams; body: InviteUserRequest }
+  >({
     action: { verb: 'create', target: 'user invite' },
     mutationFn: ({ params, body }) => inviteUser(params, body, getToken),
   });
@@ -85,6 +114,7 @@ export function useUpdateUser() {
     mutationFn: ({ params, body }) => updateUser(params, body, getToken),
     onSuccess: (_data, { params }) => {
       queryClient.invalidateQueries({ queryKey: ['identity-users'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-users-all'] });
       queryClient.invalidateQueries({ queryKey: ['identity-user', params] });
     },
   });
@@ -98,6 +128,7 @@ export function useDeleteUser() {
     mutationFn: (params) => deleteUser(params, getToken),
     onSuccess: (_data, params) => {
       queryClient.invalidateQueries({ queryKey: ['identity-users'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-users-all'] });
       queryClient.invalidateQueries({ queryKey: ['identity-user', params] });
     },
   });
@@ -114,11 +145,34 @@ export function useGetUserGroups(params: UserPathParams) {
 
 // --- Groups ---
 
-export function useListGroups(params: IdentityOrgPathParams, query?: { offset?: number; limit?: number }) {
+export function useListGroups(
+  params: IdentityOrgPathParams,
+  query?: { offset?: number; limit?: number },
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<ThunderGroupListResponse>({
     queryKey: ['identity-groups', params, query],
     queryFn: () => listGroups(params, query, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+export function useAllGroups(params: IdentityOrgPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<{ groups: ThunderGroup[] }>({
+    queryKey: ['identity-groups-all', params],
+    queryFn: async () => {
+      const PAGE_SIZE = 100;
+      let offset = 0;
+      let all: ThunderGroup[] = [];
+      while (true) {
+        const page = await listGroups(params, { offset, limit: PAGE_SIZE }, getToken);
+        all = all.concat(page.groups);
+        if (all.length >= page.total || page.groups.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+      return { groups: all };
+    },
     enabled: !!params.orgName,
   });
 }
@@ -135,11 +189,14 @@ export function useGetGroup(params: GroupPathParams) {
 export function useCreateGroup() {
   const { getToken } = useAuthHooks();
   const queryClient = useQueryClient();
-  return useApiMutation<ThunderGroup, unknown, { params: IdentityOrgPathParams; body: CreateGroupRequest }>({
+  return useApiMutation<
+    ThunderGroup, unknown, { params: IdentityOrgPathParams; body: CreateGroupRequest }
+  >({
     action: { verb: 'create', target: 'group' },
     mutationFn: ({ params, body }) => createGroup(params, body, getToken),
     onSuccess: (_data, { params }) => {
       queryClient.invalidateQueries({ queryKey: ['identity-groups', params] });
+      queryClient.invalidateQueries({ queryKey: ['identity-groups-all', params] });
     },
   });
 }
@@ -147,11 +204,15 @@ export function useCreateGroup() {
 export function useUpdateGroup() {
   const { getToken } = useAuthHooks();
   const queryClient = useQueryClient();
-  return useApiMutation<ThunderGroup, unknown, { params: GroupPathParams; body: UpdateGroupRequest }>({
+  return useApiMutation<
+    ThunderGroup, unknown, { params: GroupPathParams; body: UpdateGroupRequest }
+  >({
     action: { verb: 'update', target: 'group' },
     mutationFn: ({ params, body }) => updateGroup(params, body, getToken),
     onSuccess: (_data, { params }) => {
+      const orgParams = { orgName: params.orgName };
       queryClient.invalidateQueries({ queryKey: ['identity-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-groups-all', orgParams] });
       queryClient.invalidateQueries({ queryKey: ['identity-group', params] });
     },
   });
@@ -164,7 +225,9 @@ export function useDeleteGroup() {
     action: { verb: 'delete', target: 'group' },
     mutationFn: (params) => deleteGroup(params, getToken),
     onSuccess: (_data, params) => {
+      const orgParams = { orgName: params.orgName };
       queryClient.invalidateQueries({ queryKey: ['identity-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-groups-all', orgParams] });
       queryClient.invalidateQueries({ queryKey: ['identity-group', params] });
     },
   });
@@ -178,6 +241,7 @@ export function useAddGroupMembers() {
     mutationFn: ({ params, body }) => addGroupMembers(params, body, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['identity-group-members'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-group-member-ids-all'] });
       queryClient.invalidateQueries({ queryKey: ['identity-user-groups'] });
     },
   });
@@ -191,6 +255,7 @@ export function useRemoveGroupMembers() {
     mutationFn: ({ params, body }) => removeGroupMembers(params, body, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['identity-group-members'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-group-member-ids-all'] });
       queryClient.invalidateQueries({ queryKey: ['identity-user-groups'] });
     },
   });
@@ -205,7 +270,10 @@ export function useGetGroupRoles(params: GroupPathParams) {
   });
 }
 
-export function useGetGroupMembers(params: GroupPathParams, query?: { offset?: number; limit?: number }) {
+export function useGetGroupMembers(
+  params: GroupPathParams,
+  query?: { offset?: number; limit?: number },
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<ThunderUserListResponse>({
     queryKey: ['identity-group-members', params, query],
@@ -215,9 +283,36 @@ export function useGetGroupMembers(params: GroupPathParams, query?: { offset?: n
   });
 }
 
+export function useAllGroupMemberIds(params: GroupPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<{ memberIds: string[] }>({
+    queryKey: ['identity-group-member-ids-all', params],
+    queryFn: async () => {
+      const PAGE_SIZE = 100;
+      let offset = 0;
+      const ids: string[] = [];
+      while (true) {
+        const page = await getGroupMembers(
+          params,
+          { offset, limit: PAGE_SIZE },
+          getToken,
+        );
+        for (const u of page.users) ids.push(u.id);
+        if (ids.length >= page.total || page.users.length < PAGE_SIZE) break;
+        offset += PAGE_SIZE;
+      }
+      return { memberIds: ids };
+    },
+    enabled: !!params.orgName && !!params.groupId,
+  });
+}
+
 // --- Roles ---
 
-export function useListRoles(params: IdentityOrgPathParams, query?: { offset?: number; limit?: number }) {
+export function useListRoles(
+  params: IdentityOrgPathParams,
+  query?: { offset?: number; limit?: number },
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<ThunderRoleListResponse>({
     queryKey: ['identity-roles', params, query],
@@ -238,7 +333,9 @@ export function useGetRole(params: RolePathParams) {
 export function useCreateRole() {
   const { getToken } = useAuthHooks();
   const queryClient = useQueryClient();
-  return useApiMutation<ThunderRole, unknown, { params: IdentityOrgPathParams; body: CreateRoleRequest }>({
+  return useApiMutation<
+    ThunderRole, unknown, { params: IdentityOrgPathParams; body: CreateRoleRequest }
+  >({
     action: { verb: 'create', target: 'role' },
     mutationFn: ({ params, body }) => createRole(params, body, getToken),
     onSuccess: (_data, { params }) => {

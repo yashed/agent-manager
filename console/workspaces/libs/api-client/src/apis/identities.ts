@@ -54,7 +54,9 @@ export async function listUsers(
 ): Promise<ThunderUserListResponse> {
   const { orgName = "default" } = params;
   const token = getToken ? await getToken() : undefined;
-  const search = query ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) } : undefined;
+  const search = query
+    ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) }
+    : undefined;
   const res = await httpGET(`${orgBase(orgName)}/users`, { searchParams: search, token });
   if (!res.ok) throw await res.json();
   return res.json();
@@ -137,7 +139,9 @@ export async function listGroups(
 ): Promise<ThunderGroupListResponse> {
   const { orgName = "default" } = params;
   const token = getToken ? await getToken() : undefined;
-  const search = query ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) } : undefined;
+  const search = query
+    ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) }
+    : undefined;
   const res = await httpGET(`${orgBase(orgName)}/groups`, { searchParams: search, token });
   if (!res.ok) throw await res.json();
   return res.json();
@@ -228,7 +232,9 @@ export async function getGroupMembers(
 ): Promise<ThunderUserListResponse> {
   const { orgName = "default", groupId } = params;
   const token = getToken ? await getToken() : undefined;
-  const search = query ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) } : undefined;
+  const search = query
+    ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) }
+    : undefined;
   const res = await httpGET(`${orgBase(orgName)}/groups/${encodeURIComponent(groupId)}/members`, { searchParams: search, token });
   if (!res.ok) throw await res.json();
   return res.json();
@@ -243,7 +249,9 @@ export async function listRoles(
 ): Promise<ThunderRoleListResponse> {
   const { orgName = "default" } = params;
   const token = getToken ? await getToken() : undefined;
-  const search = query ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) } : undefined;
+  const search = query
+    ? { offset: String(query.offset ?? 0), limit: String(query.limit ?? 20) }
+    : undefined;
   const res = await httpGET(`${orgBase(orgName)}/roles`, { searchParams: search, token });
   if (!res.ok) throw await res.json();
   return res.json();

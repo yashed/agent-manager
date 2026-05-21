@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -35,8 +35,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap } from "@agent-management-platform/types";
-import type { ThunderRole } from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderRole } from "@agent-management-platform/types";
 
 export const RolesPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -54,6 +53,15 @@ export const RolesPage: React.FC = () => {
 
   const roles = useMemo(() => data?.roles ?? [], [data]);
   const total = data?.total ?? 0;
+
+  useEffect(() => {
+    if (roles.length === 0 && total > 0) {
+      const lastPage = Math.max(0, Math.ceil(total / rowsPerPage) - 1);
+      if (page !== lastPage) {
+        setPage(lastPage);
+      }
+    }
+  }, [roles.length, total, page, rowsPerPage]);
 
   const rolesBasePath = (absoluteRouteMap.children.org.children as unknown as {
     identities: { children: { roles: { path: string } } };
@@ -104,7 +112,7 @@ export const RolesPage: React.FC = () => {
       </Stack>
 
       <ListingTable.Container>
-        {roles.length === 0 ? (
+        {total === 0 ? (
           <ListingTable.EmptyState
             illustration={<Shield size={64} />}
             title="No roles yet"
@@ -143,7 +151,7 @@ export const RolesPage: React.FC = () => {
             </ListingTable.Body>
           </ListingTable>
         )}
-        {roles.length > 0 && (
+        {total > 0 && (
           <TablePagination
             component="div"
             count={total}

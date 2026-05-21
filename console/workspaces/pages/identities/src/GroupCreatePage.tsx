@@ -56,12 +56,15 @@ export const GroupCreatePage: React.FC = () => {
     }
     setNameError(undefined);
 
-    await createGroup({
-      params: { orgName: orgId },
-      body: { name: name.trim(), description: description.trim() || undefined },
-    });
-
-    navigate(groupsPath);
+    try {
+      await createGroup({
+        params: { orgName: orgId },
+        body: { name: name.trim(), description: description.trim() || undefined },
+      });
+      navigate(groupsPath);
+    } catch {
+      // createError state is set by React Query and displayed in the Alert above
+    }
   };
 
   return (

@@ -56,12 +56,15 @@ export const RoleCreatePage: React.FC = () => {
     }
     setNameError(undefined);
 
-    await createRole({
-      params: { orgName: orgId },
-      body: { name: name.trim(), description: description.trim() || undefined },
-    });
-
-    navigate(rolesPath);
+    try {
+      await createRole({
+        params: { orgName: orgId },
+        body: { name: name.trim(), description: description.trim() || undefined },
+      });
+      navigate(rolesPath);
+    } catch {
+      // createError state is set by React Query and displayed in the Alert above
+    }
   };
 
   return (

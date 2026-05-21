@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -35,8 +35,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap } from "@agent-management-platform/types";
-import type { ThunderGroup } from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderGroup } from "@agent-management-platform/types";
 
 export const GroupsPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -54,6 +53,15 @@ export const GroupsPage: React.FC = () => {
 
   const groups = useMemo(() => data?.groups ?? [], [data]);
   const total = data?.total ?? 0;
+
+  useEffect(() => {
+    if (groups.length === 0 && total > 0) {
+      const lastPage = Math.max(0, Math.ceil(total / rowsPerPage) - 1);
+      if (page !== lastPage) {
+        setPage(lastPage);
+      }
+    }
+  }, [groups.length, total, page, rowsPerPage]);
 
   const identitiesRoute = (absoluteRouteMap.children.org.children as unknown as {
     identities: { children: { groups: { path: string } } };
@@ -108,7 +116,7 @@ export const GroupsPage: React.FC = () => {
       </Stack>
 
       <ListingTable.Container>
-        {groups.length === 0 ? (
+        {total === 0 ? (
           <ListingTable.EmptyState
             illustration={<Folder size={64} />}
             title="No groups yet"
@@ -147,7 +155,7 @@ export const GroupsPage: React.FC = () => {
             </ListingTable.Body>
           </ListingTable>
         )}
-        {groups.length > 0 && (
+        {total > 0 && (
           <TablePagination
             component="div"
             count={total}

@@ -65,10 +65,9 @@ type IdentityController interface {
 }
 
 type identityController struct {
-	client     thundersvc.IdentityClient
-	rootOUOnce sync.Once
-	rootOUID   string
-	rootOUErr  error
+	client   thundersvc.IdentityClient
+	rootOUMu sync.RWMutex
+	rootOUID string
 }
 
 // NewIdentityController creates a new identity controller.
@@ -77,14 +76,28 @@ func NewIdentityController(client thundersvc.IdentityClient) IdentityController 
 }
 
 // resolveOuID returns the Thunder OU ID to use for resource creation.
-// It always fetches the root OU from Thunder (cached for the controller lifetime)
-// because the ouId in agent-manager-issued JWTs may refer to a stale OU
-// (e.g. after Thunder is reinstalled).
+// It fetches the root OU from Thunder on first success and caches it for the
+// controller lifetime. Failures are not cached so callers can retry.
 func (c *identityController) resolveOuID(r *http.Request) (string, error) {
-	c.rootOUOnce.Do(func() {
-		c.rootOUID, c.rootOUErr = c.client.GetRootOUID(r.Context())
-	})
-	return c.rootOUID, c.rootOUErr
+	c.rootOUMu.RLock()
+	if c.rootOUID != "" {
+		id := c.rootOUID
+		c.rootOUMu.RUnlock()
+		return id, nil
+	}
+	c.rootOUMu.RUnlock()
+
+	c.rootOUMu.Lock()
+	defer c.rootOUMu.Unlock()
+	if c.rootOUID != "" {
+		return c.rootOUID, nil
+	}
+	id, err := c.client.GetRootOUID(r.Context())
+	if err != nil {
+		return "", err
+	}
+	c.rootOUID = id
+	return id, nil
 }
 
 // --- Users ---

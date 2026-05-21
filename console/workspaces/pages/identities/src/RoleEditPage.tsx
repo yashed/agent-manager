@@ -35,15 +35,14 @@ import {
 import { Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
-  useListUsers,
-  useListGroups,
+  useAllUsers,
+  useAllGroups,
   useGetRoleAssignments,
   useAddRoleAssignees,
   useRemoveRoleAssignees,
 } from "@agent-management-platform/api-client";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap } from "@agent-management-platform/types";
-import type { ThunderUser, ThunderGroup } from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderUser, type ThunderGroup } from "@agent-management-platform/types";
 
 export const RoleEditPage: React.FC = () => {
   const { orgId, roleId } = useParams<{ orgId: string; roleId: string }>();
@@ -57,14 +56,8 @@ export const RoleEditPage: React.FC = () => {
     orgName: orgId,
     roleId: roleId ?? "",
   });
-  const { data: allUsersData, isLoading: isLoadingUsers } = useListUsers(
-    { orgName: orgId },
-    { offset: 0, limit: 100 },
-  );
-  const { data: allGroupsData, isLoading: isLoadingGroups } = useListGroups(
-    { orgName: orgId },
-    { offset: 0, limit: 100 },
-  );
+  const { data: allUsersData, isLoading: isLoadingUsers } = useAllUsers({ orgName: orgId });
+  const { data: allGroupsData, isLoading: isLoadingGroups } = useAllGroups({ orgName: orgId });
 
   const { mutateAsync: addAssignees } = useAddRoleAssignees();
   const { mutateAsync: removeAssignees } = useRemoveRoleAssignees();
@@ -108,8 +101,14 @@ export const RoleEditPage: React.FC = () => {
     return [...base, ...pendingGroupAdds];
   }, [initialGroups, pendingGroupAdds, removedGroupIds]);
 
-  const displayedUserIds = useMemo(() => new Set(displayedUsers.map((u) => u.id)), [displayedUsers]);
-  const displayedGroupIds = useMemo(() => new Set(displayedGroups.map((g) => g.id)), [displayedGroups]);
+  const displayedUserIds = useMemo(
+    () => new Set(displayedUsers.map((u) => u.id)),
+    [displayedUsers],
+  );
+  const displayedGroupIds = useMemo(
+    () => new Set(displayedGroups.map((g) => g.id)),
+    [displayedGroups],
+  );
 
   const availableUsers = useMemo(
     () => allUsers.filter((u) => !displayedUserIds.has(u.id)),
@@ -163,17 +162,21 @@ export const RoleEditPage: React.FC = () => {
     setIsSaving(true);
     try {
       const params = { orgName: orgId, roleId };
-      for (const u of pendingUserAdds) {
-        await addAssignees({ params, body: { userIds: [u.id] } });
+      const addUserIds = pendingUserAdds.map((u) => u.id);
+      const removeUserIds = [...removedUserIds];
+      const addGroupIds = pendingGroupAdds.map((g) => g.id);
+      const removeGroupIds = [...removedGroupIds];
+      if (addUserIds.length > 0) {
+        await addAssignees({ params, body: { userIds: addUserIds } });
       }
-      for (const id of removedUserIds) {
-        await removeAssignees({ params, body: { userIds: [id] } });
+      if (removeUserIds.length > 0) {
+        await removeAssignees({ params, body: { userIds: removeUserIds } });
       }
-      for (const g of pendingGroupAdds) {
-        await addAssignees({ params, body: { groupIds: [g.id] } });
+      if (addGroupIds.length > 0) {
+        await addAssignees({ params, body: { groupIds: addGroupIds } });
       }
-      for (const id of removedGroupIds) {
-        await removeAssignees({ params, body: { groupIds: [id] } });
+      if (removeGroupIds.length > 0) {
+        await removeAssignees({ params, body: { groupIds: removeGroupIds } });
       }
       navigate(rolesPath);
     } catch {

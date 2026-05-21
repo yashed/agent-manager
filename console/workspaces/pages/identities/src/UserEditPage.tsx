@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Autocomplete,
@@ -32,13 +32,12 @@ import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useGetUser,
   useGetUserGroups,
-  useListGroups,
+  useAllGroups,
   useAddGroupMembers,
   useRemoveGroupMembers,
 } from "@agent-management-platform/api-client";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap } from "@agent-management-platform/types";
-import type { ThunderGroup } from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderGroup } from "@agent-management-platform/types";
 
 export const UserEditPage: React.FC = () => {
   const { orgId, userId } = useParams<{ orgId: string; userId: string }>();
@@ -54,10 +53,7 @@ export const UserEditPage: React.FC = () => {
     userId: userId ?? "",
   });
 
-  const { data: allGroupsData, isLoading: isLoadingAllGroups } = useListGroups(
-    { orgName: orgId },
-    { offset: 0, limit: 100 },
-  );
+  const { data: allGroupsData, isLoading: isLoadingAllGroups } = useAllGroups({ orgName: orgId });
 
   const { mutateAsync: addMembers } = useAddGroupMembers();
   const { mutateAsync: removeMembers } = useRemoveGroupMembers();
@@ -71,9 +67,12 @@ export const UserEditPage: React.FC = () => {
   const [selectedGroups, setSelectedGroups] = useState<ThunderGroup[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
+  const hasEdited = useRef(false);
 
   useEffect(() => {
-    setSelectedGroups(initialGroups);
+    if (!hasEdited.current) {
+      setSelectedGroups(initialGroups);
+    }
   }, [initialGroups]);
 
   const usersPath = orgId
@@ -99,10 +98,16 @@ export const UserEditPage: React.FC = () => {
       const toRemove = initialGroups.filter((g) => !nextGroupIds.has(g.id));
 
       for (const g of toAdd) {
-        await addMembers({ params: { orgName: orgId, groupId: g.id }, body: { userIds: [userId] } });
+        await addMembers({
+          params: { orgName: orgId, groupId: g.id },
+          body: { userIds: [userId] },
+        });
       }
       for (const g of toRemove) {
-        await removeMembers({ params: { orgName: orgId, groupId: g.id }, body: { userIds: [userId] } });
+        await removeMembers({
+          params: { orgName: orgId, groupId: g.id },
+          body: { userIds: [userId] },
+        });
       }
 
       navigate(usersPath);
@@ -150,7 +155,10 @@ export const UserEditPage: React.FC = () => {
             multiple
             options={allGroups}
             value={selectedGroups}
-            onChange={(_e, newValue) => setSelectedGroups(newValue as ThunderGroup[])}
+            onChange={(_e, newValue) => {
+              hasEdited.current = true;
+              setSelectedGroups(newValue as ThunderGroup[]);
+            }}
             getOptionLabel={(option) => (option as ThunderGroup).name}
             isOptionEqualToValue={(option, value) =>
               (option as ThunderGroup).id === (value as ThunderGroup).id
@@ -173,9 +181,10 @@ export const UserEditPage: React.FC = () => {
                   key={group.id}
                   label={group.name}
                   size="small"
-                  onDelete={() =>
-                    setSelectedGroups((prev) => prev.filter((g) => g.id !== group.id))
-                  }
+                  onDelete={() => {
+                    hasEdited.current = true;
+                    setSelectedGroups((prev) => prev.filter((g) => g.id !== group.id));
+                  }}
                 />
               ))}
             </Stack>

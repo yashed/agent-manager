@@ -26,6 +26,7 @@ import {
   IconButton,
   ListingTable,
   Stack,
+  TablePagination,
   TextField,
   Tooltip,
   Typography,
@@ -35,23 +36,33 @@ import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useListUsers,
   useGetGroupMembers,
+  useAllGroupMemberIds,
   useGetGroupRoles,
   useAddGroupMembers,
   useRemoveGroupMembers,
 } from "@agent-management-platform/api-client";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap } from "@agent-management-platform/types";
-import type { ThunderUser, ThunderRole } from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderUser, type ThunderRole } from "@agent-management-platform/types";
 
 export const GroupEditPage: React.FC = () => {
   const { orgId, groupId } = useParams<{ orgId: string; groupId: string }>();
   const navigate = useNavigate();
 
+  const [membersPage, setMembersPage] = useState(0);
+  const [membersRowsPerPage, setMembersRowsPerPage] = useState(10);
+
   const { data: membersData, isLoading: isLoadingMembers } = useGetGroupMembers(
     { orgName: orgId, groupId: groupId ?? "" },
-    { offset: 0, limit: 100 },
+    { offset: membersPage * membersRowsPerPage, limit: membersRowsPerPage },
   );
-  const { data: rolesData } = useGetGroupRoles({
+  const { data: allMemberIdsData, isLoading: isLoadingAllMemberIds } = useAllGroupMemberIds(
+    { orgName: orgId, groupId: groupId ?? "" },
+  );
+  const {
+    data: rolesData,
+    isLoading: isLoadingRoles,
+    isError: isRolesError,
+  } = useGetGroupRoles({
     orgName: orgId,
     groupId: groupId ?? "",
   });
@@ -66,6 +77,10 @@ export const GroupEditPage: React.FC = () => {
   const initialMembers: ThunderUser[] = useMemo(
     () => membersData?.users ?? [],
     [membersData],
+  );
+  const allMemberIds: Set<string> = useMemo(
+    () => new Set(allMemberIdsData?.memberIds ?? []),
+    [allMemberIdsData],
   );
   const roles: ThunderRole[] = useMemo(() => rolesData?.roles ?? [], [rolesData]);
   const allUsers: ThunderUser[] = useMemo(() => allUsersData?.users ?? [], [allUsersData]);
@@ -86,21 +101,22 @@ export const GroupEditPage: React.FC = () => {
       )
     : "#";
 
-  // Displayed members = server state + local adds - local removes
-  const displayedMembers = useMemo(() => {
-    const base = initialMembers.filter((u) => !removedIds.has(u.id));
-    return [...base, ...pendingAdds];
-  }, [initialMembers, pendingAdds, removedIds]);
+  const membersTotal = membersData?.total ?? 0;
 
-  const displayedMemberIds = useMemo(
-    () => new Set(displayedMembers.map((u) => u.id)),
-    [displayedMembers],
+  // Server members on current page minus local removes (pending adds shown separately)
+  const pageMembers = useMemo(
+    () => initialMembers.filter((u) => !removedIds.has(u.id)),
+    [initialMembers, removedIds],
   );
 
-  const availableUsers = useMemo(
-    () => allUsers.filter((u) => !displayedMemberIds.has(u.id)),
-    [allUsers, displayedMemberIds],
-  );
+  // Exclude all current members (across all pages) minus removals, plus pending adds.
+  const availableUsers = useMemo(() => {
+    const excluded = new Set([
+      ...[...allMemberIds].filter((id) => !removedIds.has(id)),
+      ...pendingAdds.map((u) => u.id),
+    ]);
+    return allUsers.filter((u) => !excluded.has(u.id));
+  }, [allUsers, allMemberIds, pendingAdds, removedIds]);
 
   const getUsername = (user: ThunderUser) =>
     String(user.attributes?.["username"] ?? user.id ?? "");
@@ -132,7 +148,8 @@ export const GroupEditPage: React.FC = () => {
     setSaveError(undefined);
     setIsSaving(true);
     try {
-      for (const u of pendingAdds) {
+      const deduped = pendingAdds.filter((u) => !allMemberIds.has(u.id));
+      for (const u of deduped) {
         await addMembers({ params: { orgName: orgId, groupId }, body: { userIds: [u.id] } });
       }
       for (const id of removedIds) {
@@ -146,7 +163,7 @@ export const GroupEditPage: React.FC = () => {
     }
   };
 
-  const isLoading = isLoadingMembers || isLoadingUsers;
+  const isLoading = isLoadingMembers || isLoadingAllMemberIds || isLoadingUsers;
 
   if (isLoading) {
     return (
@@ -190,11 +207,45 @@ export const GroupEditPage: React.FC = () => {
             sx={{ mb: 2 }}
           />
 
-          {displayedMembers.length === 0 ? (
+          {pendingAdds.length > 0 && (
+            <Box mb={2}>
+              <Typography variant="body2" fontWeight={500} mb={1}>
+                Pending additions (unsaved)
+              </Typography>
+              <ListingTable.Container>
+                <ListingTable>
+                  <ListingTable.Head>
+                    <ListingTable.Row>
+                      <ListingTable.Cell>Username</ListingTable.Cell>
+                      <ListingTable.Cell>User ID</ListingTable.Cell>
+                      <ListingTable.Cell />
+                    </ListingTable.Row>
+                  </ListingTable.Head>
+                  <ListingTable.Body>
+                    {pendingAdds.map((user) => (
+                      <ListingTable.Row key={user.id}>
+                        <ListingTable.Cell>{getUsername(user)}</ListingTable.Cell>
+                        <ListingTable.Cell>{user.id}</ListingTable.Cell>
+                        <ListingTable.Cell align="right">
+                          <Tooltip title="Remove from group">
+                            <IconButton size="small" onClick={() => handleRemoveUser(user.id)}>
+                              <Trash size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        </ListingTable.Cell>
+                      </ListingTable.Row>
+                    ))}
+                  </ListingTable.Body>
+                </ListingTable>
+              </ListingTable.Container>
+            </Box>
+          )}
+
+          {membersTotal === 0 && pendingAdds.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               No members yet. Search and add users above.
             </Typography>
-          ) : (
+          ) : membersTotal > 0 ? (
             <ListingTable.Container>
               <ListingTable>
                 <ListingTable.Head>
@@ -205,7 +256,7 @@ export const GroupEditPage: React.FC = () => {
                   </ListingTable.Row>
                 </ListingTable.Head>
                 <ListingTable.Body>
-                  {displayedMembers.map((user) => (
+                  {pageMembers.map((user) => (
                     <ListingTable.Row key={user.id}>
                       <ListingTable.Cell>{getUsername(user)}</ListingTable.Cell>
                       <ListingTable.Cell>{user.id}</ListingTable.Cell>
@@ -223,8 +274,20 @@ export const GroupEditPage: React.FC = () => {
                   ))}
                 </ListingTable.Body>
               </ListingTable>
+              <TablePagination
+                component="div"
+                count={membersTotal}
+                page={membersPage}
+                rowsPerPage={membersRowsPerPage}
+                onPageChange={(_e, newPage) => setMembersPage(newPage)}
+                onRowsPerPageChange={(e) => {
+                  setMembersRowsPerPage(parseInt(e.target.value, 10));
+                  setMembersPage(0);
+                }}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+              />
             </ListingTable.Container>
-          )}
+          ) : null}
         </Box>
 
         {/* Roles section */}
@@ -237,8 +300,12 @@ export const GroupEditPage: React.FC = () => {
           </Typography>
           <Divider sx={{ mb: 2 }} />
 
-          {rolesData == null ? (
+          {isLoadingRoles ? (
             <CircularProgress size={20} />
+          ) : isRolesError ? (
+            <Typography variant="body2" color="error">
+              Failed to load roles. Please try again.
+            </Typography>
           ) : roles.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               No roles assigned to this group.

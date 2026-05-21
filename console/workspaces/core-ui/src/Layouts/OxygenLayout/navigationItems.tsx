@@ -96,7 +96,11 @@ export function useNavigationItems(): Array<
   const identitiesOrgRoute = (
     absoluteRouteMap.children.org.children as unknown as Record<
       string,
-      { path: string; wildPath: string; children: Record<string, { path: string; wildPath: string }> }
+      {
+        path: string;
+        wildPath: string;
+        children: Record<string, { path: string; wildPath: string }>;
+      }
     >
   ).identities;
   const evaluatorsOrgRoute = absoluteRouteMap.children.org.children.evaluators;
