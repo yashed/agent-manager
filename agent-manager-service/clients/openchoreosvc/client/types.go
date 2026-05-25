@@ -107,9 +107,10 @@ type DockerConfig struct {
 	DockerfilePath string
 }
 
-// Configurations contains environment variables for runtime
+// Configurations contains environment variables and file mounts for runtime
 type Configurations struct {
-	Env []EnvVar
+	Env   []EnvVar
+	Files []FileVar
 }
 
 // InputInterfaceConfig contains the endpoint configuration for custom-api agents
@@ -174,13 +175,6 @@ type AutoScalingConfig struct {
 	TargetCPUUtilizationPercentage *int32 `json:"cpuUtilizationPercentage,omitempty"`
 }
 
-// CORSConfig contains CORS configuration
-type CORSConfig struct {
-	AllowOrigin  []string `json:"allowOrigin,omitempty"`
-	AllowMethods []string `json:"allowMethods,omitempty"`
-	AllowHeaders []string `json:"allowHeaders,omitempty"`
-}
-
 // ComponentParameters represents the component type parameters (must match agent-api.yaml schema)
 type ComponentParameters struct {
 	Exposed bool `json:"exposed"`
@@ -206,6 +200,7 @@ type ComponentResourceConfigsResponse struct {
 type DeployRequest struct {
 	ImageID     string
 	Env         []EnvVar
+	Files       []FileVar
 	Environment string
 }
 
@@ -225,6 +220,14 @@ type EnvVarValueFrom struct {
 type SecretKeyRef struct {
 	Name string // Name of the secret
 	Key  string // Key within the secret
+}
+
+// FileVar represents a file mount configuration for deployment
+type FileVar struct {
+	Key       string
+	MountPath string
+	Value     string
+	ValueFrom *EnvVarValueFrom
 }
 
 // -----------------------------------------------------------------------------

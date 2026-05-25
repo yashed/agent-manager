@@ -22,6 +22,7 @@ export * from './BuildSteps';
 export * from './CodeBlock';
 export * from './DeploymentConfig';
 export * from './EnvironmentVariable';
+export * from './FileMountSection';
 export * from './ResourceMetricChip';
 export * from './EnvironmentCard';
 export * from './ConfirmationDialog';
