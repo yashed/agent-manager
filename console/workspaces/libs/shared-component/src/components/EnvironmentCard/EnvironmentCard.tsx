@@ -70,6 +70,7 @@ export interface EnvironmentCardProps {
   agentId: string;
   external?: true;
   actions?: React.ReactNode;
+  bottomContent?: React.ReactNode;
 }
 
 export const EnvStatus = ({ status }: { status?: DeploymentStatus, }) => {
@@ -81,7 +82,7 @@ export const EnvStatus = ({ status }: { status?: DeploymentStatus, }) => {
     return (
       <Chip
         icon={
-          <CheckCircleRounded size={16} color={theme.palette.success.main} />
+          <CheckCircleRounded size={16} color={theme.vars?.palette?.success?.main} />
         }
         variant="outlined"
         size="small"
@@ -93,7 +94,7 @@ export const EnvStatus = ({ status }: { status?: DeploymentStatus, }) => {
   if (status === DeploymentStatus.INACTIVE) {
     return (
       <Chip
-        icon={<CircleOutlined size={16} color={theme.palette.text.disabled} />}
+        icon={<CircleOutlined size={16} color={theme.vars?.palette?.text?.disabled} />}
         variant="outlined"
         size="small"
         label="Not Deployed"
@@ -144,7 +145,7 @@ const formatRelativeTime = (value?: string | number | Date) => {
 };
 
 export const EnvironmentCard = (props: EnvironmentCardProps) => {
-  const { environment, external, orgId, projectId, agentId, actions } = props;
+  const { environment, external, orgId, projectId, agentId, actions, bottomContent } = props;
   const { data: deployments, isLoading: isDeploymentsLoading } =
     useListAgentDeployments(
       {
@@ -215,7 +216,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
               <Typography variant="h6">Default Environment</Typography>
               <Chip
                 icon={
-                  <LinkOutlined size={16} color={theme.palette.success.main} />
+                  <LinkOutlined size={16} color={theme.vars?.palette?.success?.main} />
                 }
                 variant="outlined"
                 size="small"
@@ -228,7 +229,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
                 gap={1}
                 alignItems="center"
               >
-                <Clock size={16} color={theme.palette.text.secondary} />
+                <Clock size={16} color={theme.vars?.palette?.text?.secondary} />
                 {formatRelativeTime(agent?.createdAt)}
               </Box>
             </Box>
@@ -255,6 +256,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
               </Button>
             </Box>
           </Box>
+          {bottomContent}
         </CardContent>
       </Card>
     );
@@ -276,34 +278,39 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             <Typography variant="h6">
               {environment?.displayName} Environment
             </Typography>
-            <EnvStatus status={currentDiployment?.status as DeploymentStatus} />
             {currentDiployment?.status === DeploymentStatus.ACTIVE && (
-              <Box
-                display="flex"
-                flexDirection="row"
-                gap={1}
-                alignItems="center"
-              >
-                <Clock size={16} color={theme.palette.text.secondary} />
-                {formatRelativeTime(currentDiployment?.lastDeployed)}
-              </Box>
+              <>
+                <EnvStatus status={DeploymentStatus.ACTIVE} />
+                <Box
+                  display="flex"
+                  flexDirection="row"
+                  gap={1}
+                  alignItems="center"
+                >
+                  <Clock size={16} color={theme.vars?.palette?.text?.secondary} />
+                  {formatRelativeTime(currentDiployment?.lastDeployed)}
+                </Box>
+              </>
+            )}
+            {(currentDiployment?.status === DeploymentStatus.ERROR ||
+              currentDiployment?.status === DeploymentStatus.FAILED) && (
+              <EnvStatus status={currentDiployment.status as DeploymentStatus} />
             )}
           </Box>
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+            {deployedVersionLabel && (
+              <Chip
+                icon={<Tag size={14} />}
+                label={deployedVersionLabel}
+                size="small"
+                variant="outlined"
+              />
+            )}
             {currentDiployment?.status === DeploymentStatus.ACTIVE && (
               <>
-                {deployedVersionLabel && (
-                <Chip
-                  icon={<Tag size={14} />}
-                  label={deployedVersionLabel}
-                  size="small"
-                  variant="outlined"
-                />
-              )}
-              <Button
+                <Button
                   startIcon={<TryOutlined size={16} />}
                   variant="text"
-                  // disabled
                   component={Link}
                   to={generatePath(
                     absoluteRouteMap.children.org.children.projects.children
@@ -319,26 +326,6 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
                   size="small"
                 >
                   Try It
-                </Button>
-                <Button
-                  startIcon={<Workflow size={16} />}
-                  variant="text"
-                  component={Link}
-                  to={generatePath(
-                    absoluteRouteMap.children.org.children.projects.children
-                      .agents.children.environment.children.observability
-                      .children.traces.path,
-                    {
-                      orgId,
-                      projectId,
-                      agentId,
-                      envId: environment?.name ?? "default",
-                    }
-                  )}
-                  color="primary"
-                  size="small"
-                >
-                  View Traces
                 </Button>
                 {actions}
               </>
@@ -375,7 +362,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
               message="Deployment Failed"
               icon={
                 <ErrorOutlineRounded
-                  color={theme.palette.error.main}
+                  color={theme.vars?.palette?.error?.main}
                   size={32}
                 />
               }
@@ -413,6 +400,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             </Box>
           )}
         </Box>
+        {bottomContent}
       </CardContent>
     </Card>
   );

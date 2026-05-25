@@ -103,6 +103,7 @@ export function useTraceList(
   sortOrder?: GetTraceListPathParams["sortOrder"] | undefined,
   customStartTime?: string,
   customEndTime?: string,
+  options?: { enableAutoRefresh?: boolean; enabled?: boolean },
 ) {
   const { getToken } = useAuthHooks();
   const hasCustomRange = !!customStartTime && !!customEndTime;
@@ -177,7 +178,7 @@ export function useTraceList(
       }
       return { ...res, traces: applyScores(res.traces, scoreMap), fetchedRange: range };
     },
-    enabled: !!scopeParams && (hasCustomRange || !!timeRange),
+    enabled: (options?.enabled ?? true) && !!scopeParams && (hasCustomRange || !!timeRange),
   });
 
   useEffect(() => {
