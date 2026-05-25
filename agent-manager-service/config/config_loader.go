@@ -24,6 +24,7 @@ import (
 	"slices"
 
 	"github.com/joho/godotenv"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 var (
@@ -65,7 +66,7 @@ func loadEnvs() {
 	agentWorkloadConfig.CORS = CORSConfig{
 		AllowOrigin:  r.readOptionalString("AGENT_WORKLOAD_CORS_ALLOWED_ORIGIN", "http://localhost:3000"),
 		AllowMethods: r.readOptionalString("AGENT_WORKLOAD_CORS_ALLOWED_METHODS", "GET,POST,PUT,DELETE,PATCH,OPTIONS"),
-		AllowHeaders: r.readOptionalString("AGENT_WORKLOAD_CORS_ALLOWED_HEADERS", "authorization,Content-Type,Origin"),
+		AllowHeaders: r.readOptionalString("AGENT_WORKLOAD_CORS_ALLOWED_HEADERS", "authorization,Content-Type,Origin,X-API-Key"),
 	}
 
 	// Logging configuration
@@ -227,6 +228,13 @@ func loadEnvs() {
 	}
 
 	config.RBACEnabled = r.readOptionalBool("RBAC_ENABLED", false)
+  
+	// Resource limits for agent resource configurations (operator-controlled ceilings)
+	config.PerAgentResourceLimits = ResourceLimitsConfig{
+		MaxReplicas: int(r.readOptionalInt64("RESOURCE_MAX_REPLICAS", 10)),
+		MaxCPU:      r.readOptionalString("RESOURCE_MAX_CPU", "500m"),
+		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "512Mi"),
+	}
 
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key)
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key).
@@ -244,6 +252,7 @@ func loadEnvs() {
 	validateServerPublicURL(config, r)
 	validateInstrumentationURL(config, r)
 	validateInstrumentationVersionConfig(config, r)
+	validateResourceLimitsConfig(config, r)
 
 	r.logAndExitIfErrorsFound()
 
@@ -347,5 +356,17 @@ func validateInternalServerConfigs(cfg *Config, r *configReader) {
 	}
 	if cfg.InternalServer.CertDir == "" {
 		r.errors = append(r.errors, fmt.Errorf("INTERNAL_SERVER_CERT_DIR must be non-empty"))
+	}
+}
+
+func validateResourceLimitsConfig(cfg *Config, r *configReader) {
+	if cfg.PerAgentResourceLimits.MaxReplicas < 1 {
+		r.errors = append(r.errors, fmt.Errorf("RESOURCE_MAX_REPLICAS must be at least 1, got %d", cfg.PerAgentResourceLimits.MaxReplicas))
+	}
+	if _, err := resource.ParseQuantity(cfg.PerAgentResourceLimits.MaxCPU); err != nil {
+		r.errors = append(r.errors, fmt.Errorf("RESOURCE_MAX_CPU %q is not a valid Kubernetes resource quantity: %w", cfg.PerAgentResourceLimits.MaxCPU, err))
+	}
+	if _, err := resource.ParseQuantity(cfg.PerAgentResourceLimits.MaxMemory); err != nil {
+		r.errors = append(r.errors, fmt.Errorf("RESOURCE_MAX_MEMORY %q is not a valid Kubernetes resource quantity: %w", cfg.PerAgentResourceLimits.MaxMemory, err))
 	}
 }
