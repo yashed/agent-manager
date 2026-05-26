@@ -351,7 +351,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
     }
 
     return false;
-  }, [config, envVarNames, guardrailsByEnv]);
+  }, [config, envVarNames, guardrailsByEnv, pendingProviderByEnv]);
 
   const handleAddGuardrail = useCallback(
     (guardrail: GuardrailSelection) => {
@@ -487,10 +487,9 @@ export const ViewLLMProviderComponent: React.FC = () => {
           name: config.name,
           envMappings,
           environmentVariables: Object.keys(envVarNames).length > 0
-            ? Object.entries(envVarNames).map(([key, n]) => ({
-              key,
-              name: n.trim(),
-            }))
+            ? Object.entries(envVarNames)
+              .filter(([, n]) => n.trim() !== "")
+              .map(([key, n]) => ({ key, name: n.trim() }))
             : undefined,
         },
       },
@@ -552,6 +551,10 @@ export const ViewLLMProviderComponent: React.FC = () => {
   const pageTitle = catalogProvider?.name
     ?? providerConfig?.providerName
     ?? config.name;
+
+  const hasEmptyEnvVarName = (config.environmentVariables ?? []).some(
+    (ev) => (envVarNames[ev.key] ?? ev.name).trim() === "",
+  );
 
   const showPanel = (isExternal && !!providerConfig)
     || (!isExternal && (config.environmentVariables?.length ?? 0) > 0);
@@ -670,7 +673,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
                   size="small"
                   variant="contained"
                   onClick={handleSave}
-                  disabled={updateConfig.isPending}
+                  disabled={updateConfig.isPending || hasEmptyEnvVarName}
                 >
                   {updateConfig.isPending ? "Saving…" : "Save changes"}
                 </Button>
@@ -957,7 +960,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
                   variant="contained"
                   size="small"
                   onClick={handleSave}
-                  disabled={updateConfig.isPending}
+                  disabled={updateConfig.isPending || hasEmptyEnvVarName}
                 >
                   {updateConfig.isPending ? "Saving…" : "Save"}
                 </Button>

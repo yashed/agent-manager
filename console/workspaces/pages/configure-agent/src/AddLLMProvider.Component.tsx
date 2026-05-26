@@ -751,7 +751,7 @@ export const AddLLMProviderComponent: React.FC = () => {
                   <Button
                     variant="outlined"
                     onClick={() => setProviderDrawerOpen(true)}
-                    disabled={providers.length === 0}
+                    disabled={providers.length === 0 || !selectedEnvName}
                     startIcon={<Link size={16} />}
                   >
                     Select a Service Provider
@@ -775,9 +775,11 @@ export const AddLLMProviderComponent: React.FC = () => {
                 ? `Choose the catalog provider for the ${environments[selectedEnvIndex]?.displayName ?? environments[selectedEnvIndex]?.name ?? ""} environment.`
                 : "Choose the catalog provider for this agent."
             }
-            onSelect={(uuid) =>
-              setProviderByEnv((prev) => ({ ...prev, [selectedEnvName]: uuid }))
-            }
+            onSelect={(uuid) => {
+              if (selectedEnvName) {
+                setProviderByEnv((prev) => ({ ...prev, [selectedEnvName]: uuid }));
+              }
+            }}
           />
           {providerByEnv[selectedEnvName] && (
             <GuardrailsSection

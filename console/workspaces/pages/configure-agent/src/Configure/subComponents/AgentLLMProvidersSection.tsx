@@ -81,7 +81,7 @@ export function AgentLLMProvidersSection() {
     return configs.filter(
       (c) =>
         c.name.toLowerCase().includes(lower) ||
-        c.type.toLowerCase().includes(lower),
+        (c.type ?? "").toLowerCase().includes(lower),
     );
   }, [configs, searchValue]);
 
