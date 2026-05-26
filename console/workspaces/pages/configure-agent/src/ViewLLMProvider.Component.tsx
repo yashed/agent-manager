@@ -553,7 +553,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
     ?? providerConfig?.providerName
     ?? config.name;
 
-  const showPanel = (isExternal && !!providerConfig) || (!isExternal && (config.environmentVariables?.length ?? 0) > 0);
+  const showPanel = (isExternal && !!providerConfig)
+    || (!isExternal && (config.environmentVariables?.length ?? 0) > 0);
 
   const envVarsPanel = showPanel && (
     <DrawerWrapper
@@ -684,7 +685,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
           <Stack spacing={1}>
             <Typography variant="subtitle1" fontWeight={600}>Environment Variable Names</Typography>
             <Typography variant="body2" color="text.secondary">
-              These variable names are injected into the agent at runtime with environment-specific values. Rename them here if your code already uses different names — then save.
+              These variable names are injected into the agent at runtime with environment-specific
+              values. Rename them here if your code already uses different names — then save.
             </Typography>
             <ListingTable.Container>
               <ListingTable density="compact">
@@ -729,7 +731,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
             <Stack spacing={0.5}>
               <Typography variant="subtitle1" fontWeight={600}>Integration Guide</Typography>
               <Typography variant="body2" color="text.secondary">
-                Copy the snippet below into your agent code. The environment variables will be injected automatically at runtime — do not hardcode their values.
+                Copy the snippet below into your agent code. The environment variables will be
+                injected automatically at runtime — do not hardcode their values.
               </Typography>
             </Stack>
             <ToggleButtonGroup
@@ -887,7 +890,12 @@ export const ViewLLMProviderComponent: React.FC = () => {
                 : catalogProvider;
               const displayTemplate = displayCatalog?.template
                 ? templateMap.get(displayCatalog.template)
-                : (catalogProvider?.template ? { displayName: templateDisplayName ?? catalogProvider.template, logoUrl: templateLogo } : null);
+                : (catalogProvider?.template
+                  ? {
+                    displayName: templateDisplayName ?? catalogProvider.template,
+                    logoUrl: templateLogo,
+                  }
+                  : null);
 
               return (
                 <Card>

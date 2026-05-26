@@ -50,6 +50,7 @@ import {
   absoluteRouteMap,
   type CatalogSecuritySummary,
   type CatalogRateLimitingSummary,
+  type LLMPolicy,
 } from "@agent-management-platform/types";
 import {
   useCreateAgentModelConfig,
@@ -397,7 +398,8 @@ export const AddLLMProviderComponent: React.FC = () => {
   const handleAddGuardrail = useCallback((guardrail: GuardrailSelection) => {
     setGuardrailsByEnv((prev) => {
       const list = prev[selectedEnvName] ?? [];
-      if (list.some((g) => g.name === guardrail.name && g.version === guardrail.version)) return prev;
+      const exists = list.some((g) => g.name === guardrail.name && g.version === guardrail.version);
+      if (exists) return prev;
       return { ...prev, [selectedEnvName]: [...list, guardrail] };
     });
   }, [selectedEnvName]);
@@ -405,14 +407,18 @@ export const AddLLMProviderComponent: React.FC = () => {
   const handleEditGuardrail = useCallback((guardrail: GuardrailSelection) => {
     setGuardrailsByEnv((prev) => {
       const list = prev[selectedEnvName] ?? [];
-      return { ...prev, [selectedEnvName]: list.map((g) => g.name === guardrail.name && g.version === guardrail.version ? guardrail : g) };
+      const updated = list.map(
+        (g) => g.name === guardrail.name && g.version === guardrail.version ? guardrail : g,
+      );
+      return { ...prev, [selectedEnvName]: updated };
     });
   }, [selectedEnvName]);
 
   const handleRemoveGuardrail = useCallback((gName: string, gVersion: string) => {
     setGuardrailsByEnv((prev) => {
       const list = prev[selectedEnvName] ?? [];
-      return { ...prev, [selectedEnvName]: list.filter((g) => !(g.name === gName && g.version === gVersion)) };
+      const filtered = list.filter((g) => !(g.name === gName && g.version === gVersion));
+      return { ...prev, [selectedEnvName]: filtered };
     });
   }, [selectedEnvName]);
 
@@ -421,7 +427,7 @@ export const AddLLMProviderComponent: React.FC = () => {
       string,
       {
         providerName?: string;
-        configuration: { policies?: { name?: string; version?: string; paths?: unknown[] }[] };
+        configuration: { policies?: LLMPolicy[] };
       }
     > = {};
     let hasAtLeastOneProvider = false;
@@ -667,9 +673,8 @@ export const AddLLMProviderComponent: React.FC = () => {
                 sx={{ mb: 2 }}
               >
                 {environments.map((env, idx) => {
-                  const hasProvider = !!providerByEnv[env.name] || (
-                    isEditMode && !!existingConfig?.envMappings?.[env.name]?.configuration?.providerName
-                  );
+                  const hasProvider = !!providerByEnv[env.name] || (isEditMode
+                    && !!existingConfig?.envMappings?.[env.name]?.configuration?.providerName);
                   return (
                     <Tab
                       key={env.name}
@@ -788,7 +793,9 @@ export const AddLLMProviderComponent: React.FC = () => {
           <Form.Section>
             <Form.Header>Environment Variable Names</Form.Header>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              These names are shared across all environments. The platform injects the actual URL and API key values at runtime per environment. Edit only if your code uses different names.
+              These names are shared across all environments. The platform injects the actual URL
+              and API key values at runtime per environment. Edit only if your code uses different
+              names.
             </Typography>
             <ListingTable.Container>
               <ListingTable density="compact">
