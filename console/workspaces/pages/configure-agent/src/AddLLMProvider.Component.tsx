@@ -41,6 +41,7 @@ import {
   Check,
   Circle,
   Link,
+  Search,
   ServerCog,
 } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
@@ -254,9 +255,6 @@ export const AddLLMProviderComponent: React.FC = () => {
   // Track whether the user has manually edited env var names
   const envVarNamesEditedRef = useRef(false);
   const [providerDrawerOpen, setProviderDrawerOpen] = useState(false);
-  const [providerSearchQuery, setProviderSearchQuery] = useState("");
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   const backHref =
     orgId && projectId && agentId
@@ -423,7 +421,7 @@ export const AddLLMProviderComponent: React.FC = () => {
       string,
       {
         providerName?: string;
-        configuration: { policies?: typeof policies };
+        configuration: { policies?: { name?: string; version?: string; paths?: unknown[] }[] };
       }
     > = {};
     let hasAtLeastOneProvider = false;
@@ -766,7 +764,7 @@ export const AddLLMProviderComponent: React.FC = () => {
             onClose={() => setProviderDrawerOpen(false)}
             providers={providers}
             templateMap={templateMap}
-            selectedUuid={providerByEnv[selectedEnvName]}
+            selectedUuid={providerByEnv[selectedEnvName] ?? undefined}
             subtitle={
               environments.length > 1
                 ? `Choose the catalog provider for the ${environments[selectedEnvIndex]?.displayName ?? environments[selectedEnvIndex]?.name ?? ""} environment.`
