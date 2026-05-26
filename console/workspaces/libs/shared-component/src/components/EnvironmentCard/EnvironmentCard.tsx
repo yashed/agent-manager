@@ -42,7 +42,6 @@ import {
   CheckCircle as CheckCircleRounded,
   Circle as CircleOutlined,
   Clock,
-  XCircle as ErrorOutlineRounded,
   Rocket as RocketLaunchOutlined,
   FlaskConical as TryOutlined,
   Workflow,
@@ -351,17 +350,28 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
               icon={<CircularProgress size={32} />}
             />
           )}
-          {currentDiployment.status === DeploymentStatus.ERROR && (
-            <NoDataFound
-              disableBackground
-              message="Deployment Failed"
-              icon={
-                <ErrorOutlineRounded
-                  color={theme.vars?.palette?.error?.main}
-                  size={32}
-                />
+          {(currentDiployment.status === DeploymentStatus.ERROR ||
+            currentDiployment.status === DeploymentStatus.FAILED) && (
+            <Alert
+              severity="error"
+              sx={{ width: "100%" }}
+              action={
+                <Button
+                  component={Link}
+                  to={generatePath(
+                    absoluteRouteMap.children.org.children.projects.children
+                      .agents.children.deployment.path,
+                    { orgId, projectId, agentId }
+                  )}
+                  color="inherit"
+                  size="small"
+                >
+                  View Deployment
+                </Button>
               }
-            />
+            >
+              Deployment failed. Check the deployment page for more details.
+            </Alert>
           )}
           {currentDiployment.status === DeploymentStatus.ACTIVE && (
             <Box

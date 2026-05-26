@@ -33,7 +33,8 @@ export const DonutIcon: React.FC<DonutIconProps> = ({ percent, color, size = 30 
     const r = size * 0.43;
     const sw = size * 0.117;
     const circumference = 2 * Math.PI * r;
-    const offset = circumference * (1 - Math.min(percent, 100) / 100);
+    const safePercent = Number.isFinite(percent) ? Math.min(Math.max(percent, 0), 100) : 0;
+    const offset = circumference * (1 - safePercent / 100);
     return (
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block" }}>
             <circle cx={cx} cy={cx} r={r} fill="none"

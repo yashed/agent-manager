@@ -55,8 +55,8 @@ export const MetricsComponent: React.FC = () => {
       hasCustomRange
         ? undefined
         : (Object.values(TraceListTimeRange) as string[]).includes(
-            searchParams.get("timeRange") ?? "",
-          )
+          searchParams.get("timeRange") ?? "",
+        )
           ? (searchParams.get("timeRange") as TraceListTimeRange)
           : TraceListTimeRange.ONE_HOUR,
     [searchParams, hasCustomRange],
@@ -65,7 +65,7 @@ export const MetricsComponent: React.FC = () => {
   const { data: deployments } = useListAgentDeployments(
     { orgName: orgId, projName: projectId, agentName: agentId },
   );
-  const isSuspended = deployments?.[envId ?? ""]?.status === "suspended";
+  const isSuspended = deployments === undefined ? undefined : deployments[envId ?? ""]?.status === "suspended";
 
   const metricsFilterRequest = useMemo(
     () => ({
@@ -85,7 +85,8 @@ export const MetricsComponent: React.FC = () => {
     { agentName: agentId, orgName: orgId, projName: projectId },
     metricsFilterRequest,
     {
-      enabled: !isSuspended && !!agentId && !!orgId && !!projectId && !!envId && (hasCustomRange || !!timeRange),
+      enabled: isSuspended === false && !!agentId && !!orgId &&
+        !!projectId && !!envId && (hasCustomRange || !!timeRange),
       enableAutoRefresh: !hasCustomRange,
       timeRange: hasCustomRange ? undefined : timeRange,
     }
@@ -107,50 +108,50 @@ export const MetricsComponent: React.FC = () => {
   );
 
   return (
-      <PageLayout
-        title="Metrics"
-        disableIcon
-        actions={
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
-            <TimeRangeSelector
-              preset={timeRange}
-              customStart={customStartTime}
-              customEnd={customEndTime}
-              options={TIME_RANGE_OPTIONS}
-              onPresetChange={handleTimeRangeChange}
-              onCustomRangeApply={handleCustomRangeApply}
-            />
+    <PageLayout
+      title="Metrics"
+      disableIcon
+      actions={
+        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+          <TimeRangeSelector
+            preset={timeRange}
+            customStart={customStartTime}
+            customEnd={customEndTime}
+            options={TIME_RANGE_OPTIONS}
+            onPresetChange={handleTimeRangeChange}
+            onCustomRangeApply={handleCustomRangeApply}
+          />
 
-            {/* Refresh Button */}
-            <IconButton
-              size="small"
-              disabled={isRefetching}
-              onClick={handleRefresh}
-              aria-label="Refresh"
-            >
-              {isRefetching ? (
-                <CircularProgress size={16} />
-              ) : (
-                <RefreshCcw size={16} />
-              )}
-            </IconButton>
-          </Stack>
-        }
-      >
-        {isSuspended ? (
-          <NoDataFound
-            iconElement={PauseCircle}
-            message="Environment Suspended"
-            subtitle="Metrics are unavailable while the environment is suspended."
-          />
-        ) : (
-          <MetricsView
-            metrics={metrics}
-            isLoading={isLoading}
-            error={error}
-          />
-        )}
-      </PageLayout>
+          {/* Refresh Button */}
+          <IconButton
+            size="small"
+            disabled={isRefetching}
+            onClick={handleRefresh}
+            aria-label="Refresh"
+          >
+            {isRefetching ? (
+              <CircularProgress size={16} />
+            ) : (
+              <RefreshCcw size={16} />
+            )}
+          </IconButton>
+        </Stack>
+      }
+    >
+      {isSuspended ? (
+        <NoDataFound
+          iconElement={PauseCircle}
+          message="Environment Suspended"
+          subtitle="Metrics are unavailable while the environment is suspended."
+        />
+      ) : (
+        <MetricsView
+          metrics={metrics}
+          isLoading={isLoading}
+          error={error}
+        />
+      )}
+    </PageLayout>
 
   );
 };

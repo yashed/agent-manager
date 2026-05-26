@@ -128,7 +128,6 @@ export const ExternalAgentOverview = () => {
           sortedEnvironmentList?.find((env: Environment) => env.id === selectedEnvironmentId)?.name
         }
         instrumentationUrl={agentInstrumentationUrl}
-        apiKey="ey***"
         componentUid={agent?.uuid}
         environmentUid={selectedEnvironmentId}
       />

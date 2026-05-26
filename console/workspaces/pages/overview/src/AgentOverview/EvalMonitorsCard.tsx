@@ -164,7 +164,7 @@ export const EvalMonitorsCard: React.FC<EvalMonitorsCardProps> = ({
         <Card variant="outlined">
             <CardContent>
                 <Box display="flex" justifyContent="space-between" alignItems="center" pb={1}>
-                    <Typography variant="h6">Evaluation</Typography>
+                    <Typography variant="h6">Monitors</Typography>
                     <Button
                         size="small"
                         variant="text"

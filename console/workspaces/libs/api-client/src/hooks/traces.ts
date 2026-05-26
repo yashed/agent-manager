@@ -380,7 +380,8 @@ export function useTraceList(
   // replacing the whole list. Falls back to a full refetch when the list is
   // empty (e.g. on initial load or after the user clears filters).
   useEffect(() => {
-    if (hasCustomRange || !scopeParams) return;
+    if (hasCustomRange || !scopeParams || options?.enabled === false
+      || !options?.enableAutoRefresh) return;
     const timer = setInterval(() => {
       if (traceListRef.current?.traces?.length) {
         loadNewerRef.current();
@@ -389,7 +390,7 @@ export function useTraceList(
       }
     }, 30000);
     return () => clearInterval(timer);
-  }, [hasCustomRange, scopeParams]);
+  }, [hasCustomRange, scopeParams, options?.enabled, options?.enableAutoRefresh]);
 
   return {
     ...queryResult,
