@@ -1,7 +1,7 @@
 # AMP Instrumentation Matrix
 
 Per-PR + nightly compatibility matrix for AMP instrumentation. See
-[`references/INSTRUMENTATION-MATRIX-DESIGN.md`](../../references/INSTRUMENTATION-MATRIX-DESIGN.md)
+[`INSTRUMENTATION-MATRIX-DESIGN.md`](./INSTRUMENTATION-MATRIX-DESIGN.md)
 for the architecture; this README is the operational quickstart.
 
 ## Run locally
