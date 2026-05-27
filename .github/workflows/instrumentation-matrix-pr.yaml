@@ -7,8 +7,14 @@ on:
       - 'libs/amp-instrumentation/**'
       - 'samples/manual-instrumentation-agent/**'
       - '.github/release-config.json'
+      - '.github/workflows/instrumentation-matrix-pr.yaml'
+      - '.github/actions/setup-go/**'
       - 'test/instrumentation-matrix/**'
       - 'traces-observer-service/**'
+      - 'scripts/check-cassettes.py'
+      - 'scripts/check-matrix-manifest.py'
+      - 'scripts/check-contract-drift.sh'
+      - 'Makefile'
   push:
     branches: [main]
     paths:
@@ -16,12 +22,20 @@ on:
       - 'libs/amp-instrumentation/**'
       - 'samples/manual-instrumentation-agent/**'
       - '.github/release-config.json'
+      - '.github/workflows/instrumentation-matrix-pr.yaml'
+      - '.github/actions/setup-go/**'
       - 'test/instrumentation-matrix/**'
       - 'traces-observer-service/**'
+      - 'scripts/check-cassettes.py'
+      - 'scripts/check-matrix-manifest.py'
+      - 'scripts/check-contract-drift.sh'
+      - 'Makefile'
 
 concurrency:
   group: instrumentation-matrix-${{ github.ref }}
-  cancel-in-progress: true
+  # PRs: cancel superseded runs (last push wins). Pushes to main: let runs
+  # complete so we don't show "cancelled" on commits that were fine.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -49,7 +63,10 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install nox
-        run: pip install nox
+        # pyyaml is needed by harness/manifest.py at module import time —
+        # both `python -c "from harness.manifest import …"` below and
+        # `nox -s emission` load it before any per-cell venv exists.
+        run: pip install nox pyyaml
       - name: Resolve default cell id
         id: default
         working-directory: test/instrumentation-matrix
@@ -82,7 +99,9 @@ jobs:
             3.11
             3.12
             3.13
-      - run: pip install nox
+      # pyyaml here is for the outer nox process — see comment above on
+      # check-default-cell. Per-cell venvs install their own pyyaml.
+      - run: pip install nox pyyaml
       - name: Run full emission matrix
         working-directory: test/instrumentation-matrix
         run: nox -s emission

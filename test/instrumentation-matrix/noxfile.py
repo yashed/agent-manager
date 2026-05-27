@@ -111,12 +111,26 @@ def report(session):
     cells_dir = reports / "cells"
     diffs_dir = reports / "diffs"
     contracts_dir = HERE / "contracts"
+    reports.mkdir(parents=True, exist_ok=True)
     diffs_dir.mkdir(parents=True, exist_ok=True)
 
-    if not cells_dir.exists():
-        session.error(
-            f"no per-cell reports under {cells_dir}; run `nox -s emission` first"
+    # When emission produced zero reports (matrix empty, all skipped, or — most
+    # commonly — the outer nox crashed before any cell ran), CI still wants a
+    # PR comment that makes the absence visible. Write a placeholder summary
+    # instead of failing the report job and silently leaving no comment.
+    cell_files = sorted(cells_dir.glob("*.json")) if cells_dir.exists() else []
+    if not cell_files:
+        (reports / "summary.md").write_text(
+            "## Instrumentation matrix — emission tier\n"
+            "\n"
+            "No per-cell reports were produced. The emission job likely failed "
+            "before any cell ran; check the workflow logs for the failing step.\n"
         )
+        session.log(
+            f"no per-cell reports under {cells_dir}; "
+            f"wrote placeholder summary to {reports / 'summary.md'}"
+        )
+        return
 
     m = load_manifest(HERE / "matrix.yaml")
     default_id = (
