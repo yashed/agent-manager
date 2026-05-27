@@ -81,6 +81,20 @@ def emission(session, cell):
         os.environ.get("ANTHROPIC_API_KEY") or "test-key-not-used-vcr-replays"
     )
 
+    # An incoming REPORTS_DIR lets nightly's revalidate-known-broken job
+    # redirect output to `reports/revalidate/` without forking the session.
+    # Relative paths resolve under the suite directory, mirroring how the
+    # default behaves.
+    reports_override = os.environ.get("REPORTS_DIR")
+    if reports_override:
+        reports_dir = (
+            Path(reports_override)
+            if Path(reports_override).is_absolute()
+            else HERE / reports_override
+        )
+    else:
+        reports_dir = HERE / "reports" / "cells"
+
     session.run(
         str(py),
         "-m",
@@ -92,7 +106,7 @@ def emission(session, cell):
             "PYTHONPATH": pythonpath,
             "VCR_RECORD_MODE": record_mode,
             "CELL_MANIFEST": json.dumps(cell_manifest),
-            "REPORTS_DIR": str(HERE / "reports" / "cells"),
+            "REPORTS_DIR": str(reports_dir),
             "OPENAI_API_KEY": openai_key,
             "ANTHROPIC_API_KEY": anthropic_key,
         },
