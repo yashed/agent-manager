@@ -35,3 +35,19 @@ def test_cassette_miss():
         )
         == FailureCategory.CASSETTE_MISS
     )
+
+
+def test_install_stage_does_not_match_scenario_phrases():
+    """A pip log that incidentally contains a scenario-stage phrase must not
+    be misclassified — install can only emit install-stage categories."""
+    assert (
+        categorize(stage="install", error_text="ImportError: cannot import name 'x'")
+        == FailureCategory.UNKNOWN
+    )
+
+
+def test_scenario_stage_does_not_match_install_phrases():
+    assert (
+        categorize(stage="scenario", error_text="No matching distribution found")
+        == FailureCategory.UNKNOWN
+    )

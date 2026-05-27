@@ -104,11 +104,13 @@ def report(session):
     """Aggregate per-cell reports into a summary + triage page set."""
     from harness.aggregator import build_summary
     from harness.manifest import load_manifest
-    from harness.triage import build_diff_markdown
+    from harness.reports import load_cell_report
+    from harness.triage import build_diff_markdown, required_keys_for_kinds
 
     reports = HERE / "reports"
     cells_dir = reports / "cells"
     diffs_dir = reports / "diffs"
+    contracts_dir = HERE / "contracts"
     diffs_dir.mkdir(parents=True, exist_ok=True)
 
     if not cells_dir.exists():
@@ -123,23 +125,28 @@ def report(session):
         f"py{m.default_cell.python}"
     )
 
+    # cell-id → "<provider>/<contract-schema>" so each diff page derives its
+    # required-key set from the schema the cell was validated against.
+    cell_schema_id: dict[str, str] = {}
+    for cell in expand_matrix(m):
+        provider = PROVIDERS[cell.provider_name]
+        cell_schema_id[cell.id] = provider.contract_schema_id()
+
     summary = build_summary(cells_dir, default_cell_id=default_id)
     (reports / "summary.md").write_text(summary)
 
     for f in cells_dir.glob("*.json"):
-        r = json.loads(f.read_text())
+        r = load_cell_report(f)
         if r["result"] != "fail":
             continue
-        # Generic required-set covers the high-signal LLM keys most cells
-        # carry; richer per-kind diffs are a follow-up.
-        diff = build_diff_markdown(
-            r,
-            schema_required=[
-                "gen_ai.system",
-                "gen_ai.request.model",
-                "traceloop.span.kind",
-            ],
-        )
+        expected_kinds = (r.get("coverage") or {}).get("expected") or []
+        schema_id = cell_schema_id.get(r["cellId"])
+        if schema_id is None:
+            # Stale report from a cell no longer in the manifest; fall back to
+            # the only schema we currently ship rather than skip the diff.
+            schema_id = "traceloop/v1"
+        required = required_keys_for_kinds(contracts_dir, schema_id, expected_kinds)
+        diff = build_diff_markdown(r, schema_required=required)
         (diffs_dir / f"{r['cellId']}.diff.md").write_text(diff)
 
     session.log(f"summary written to {reports / 'summary.md'}")

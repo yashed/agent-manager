@@ -1,4 +1,4 @@
-"""Per-cell JSON report writer."""
+"""Per-cell JSON report writer + reader."""
 from __future__ import annotations
 
 import base64
@@ -40,3 +40,23 @@ def write_cell_report(result: CellResult, reports_dir: Path) -> Path:
     out = reports_dir / f"{result.cell_id}.json"
     out.write_text(json.dumps(payload, indent=2))
     return out
+
+
+def load_cell_report(path: Path) -> dict[str, Any]:
+    """Read a per-cell report and expand `capturedSpans` back into a list.
+
+    The on-disk format gzips+base64s the captured spans to keep report files
+    compact. Callers that triage failures need the decoded span list and a
+    flat view of attribute keys — both are added to the returned dict as
+    `capturedSpansDecoded` and `capturedSpansAttributes`. The original
+    `capturedSpans` blob is left in place so the round-trip is non-lossy.
+    """
+    data = json.loads(Path(path).read_text())
+    blob = data.get("capturedSpans") or ""
+    if blob:
+        spans = json.loads(gzip.decompress(base64.b64decode(blob)).decode("utf-8"))
+    else:
+        spans = []
+    data["capturedSpansDecoded"] = spans
+    data["capturedSpansAttributes"] = [s.get("attributes", {}) or {} for s in spans]
+    return data

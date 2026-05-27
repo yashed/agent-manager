@@ -8,6 +8,36 @@ high-signal "what's missing" axis.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+
+def required_keys_for_kinds(
+    contracts_dir: Path, schema_id: str, kinds: list[str]
+) -> list[str]:
+    """Return the union of `attributes.required` across the named kind schemas.
+
+    `anyOf`-style alternatives (e.g. llm.vendor key) aren't expanded — only
+    keys that the schema marks unconditionally required appear here, since
+    those are the safe "must be present" set a triage page can assert without
+    qualification.
+    """
+    bundle = Path(contracts_dir) / schema_id / "kinds"
+    keys: set[str] = set()
+    for kind in kinds:
+        schema_path = bundle / f"{kind}.schema.json"
+        if not schema_path.exists():
+            continue
+        schema = json.loads(schema_path.read_text())
+        required = (
+            schema.get("properties", {})
+            .get("attributes", {})
+            .get("required")
+            or []
+        )
+        keys.update(required)
+    return sorted(keys)
+
 
 def build_diff_markdown(report: dict, *, schema_required: list[str]) -> str:
     lines = [

@@ -1,13 +1,24 @@
 """Map stage + error text to a categorical failure label.
 
 The aggregator counts by category so triage starts with "what kind of failure
-am I looking at" rather than "which cell". Keep the substring matches narrow
-and case-insensitive; broaden only when a real failure surfaces a phrasing the
-classifier missed.
+am I looking at" rather than "which cell". Each branch is gated on the stage
+that *can* produce it, so future error strings can't drift between categories
+just because they happen to share a substring with an unrelated stage.
+
+Branches are matched in order; the first hit wins. Keep the substring matches
+narrow and case-insensitive; broaden only when a real failure surfaces a
+phrasing the classifier missed.
+
+TODO(phase-6): wire this into ``harness/test_cell.py`` so install and scenario
+errors get categorized at the source. Today the per-cell pytest body assigns
+category strings directly from validator outcomes; pip / sample-import paths
+don't flow through this classifier yet.
 """
 from __future__ import annotations
 
 from enum import Enum
+
+_SCENARIO_STAGES = {"scenario", "validate"}
 
 
 class FailureCategory(str, Enum):
@@ -27,14 +38,16 @@ def categorize(stage: str, error_text: str) -> FailureCategory:
     if stage == "install":
         if "no matching distribution" in t or "could not find a version" in t:
             return FailureCategory.INSTALL_FAILURE
-    if "cannotoverwriteexistingcassette" in t or "no match was found" in t:
-        return FailureCategory.CASSETTE_MISS
-    if "no spans captured" in t:
-        return FailureCategory.NO_SPANS_CAPTURED
-    if "missing span kinds" in t:
-        return FailureCategory.MISSING_SPAN_KIND
-    if "importerror" in t or "modulenotfounderror" in t:
-        return FailureCategory.SAMPLE_IMPORT_FAILURE
-    if "is required" in t or "does not match" in t or "is not of type" in t:
-        return FailureCategory.SCHEMA_VIOLATION
+        return FailureCategory.UNKNOWN
+    if stage in _SCENARIO_STAGES:
+        if "cannotoverwriteexistingcassette" in t or "no match was found" in t:
+            return FailureCategory.CASSETTE_MISS
+        if "no spans captured" in t:
+            return FailureCategory.NO_SPANS_CAPTURED
+        if "missing span kinds" in t:
+            return FailureCategory.MISSING_SPAN_KIND
+        if "importerror" in t or "modulenotfounderror" in t:
+            return FailureCategory.SAMPLE_IMPORT_FAILURE
+        if "is required" in t or "does not match" in t or "is not of type" in t:
+            return FailureCategory.SCHEMA_VIOLATION
     return FailureCategory.UNKNOWN
