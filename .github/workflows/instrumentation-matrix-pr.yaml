@@ -41,7 +41,7 @@ permissions:
   contents: read
 
 jobs:
-  drift-checks:
+  verify-contract-and-manifest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,9 +53,9 @@ jobs:
       - run: make check-contract-drift
       - run: make check-matrix-manifest
 
-  check-default-cell:
+  default-cell-required:
     runs-on: ubuntu-latest
-    needs: drift-checks
+    needs: verify-contract-and-manifest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -86,9 +86,9 @@ jobs:
           name: default-cell-report
           path: test/instrumentation-matrix/reports/
 
-  emission-matrix:
+  full-emission-matrix:
     runs-on: ubuntu-latest
-    needs: drift-checks
+    needs: verify-contract-and-manifest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -99,12 +99,12 @@ jobs:
             3.12
             3.13
       # pyyaml here is for the outer nox process — see comment above on
-      # check-default-cell. Per-cell venvs install their own pyyaml.
+      # default-cell-required. Per-cell venvs install their own pyyaml.
       - run: pip install nox pyyaml
       - name: Run full emission matrix
         working-directory: test/instrumentation-matrix
         run: nox -s emission
-        continue-on-error: true   # advisory; check-default-cell is the gating job
+        continue-on-error: true   # advisory; default-cell-required is the gating job
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -112,9 +112,9 @@ jobs:
           name: matrix-reports
           path: test/instrumentation-matrix/reports/
 
-  matrix-report:
+  publish-matrix-summary:
     runs-on: ubuntu-latest
-    needs: [emission-matrix, check-default-cell]
+    needs: [full-emission-matrix, default-cell-required]
     if: always()
     steps:
       - uses: actions/checkout@v4
@@ -139,7 +139,7 @@ jobs:
         working-directory: test/instrumentation-matrix
         run: cat reports/summary.md >> "$GITHUB_STEP_SUMMARY"
 
-  cassette-leak:
+  scan-cassettes-for-secrets:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

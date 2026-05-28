@@ -35,10 +35,10 @@ OPENAI_API_KEY=sk-... ANTHROPIC_API_KEY=sk-ant-... \
 3. Record cassettes for any new scenarios.
 4. Open a PR; the
    [Tier 1 workflow](../../.github/workflows/instrumentation-matrix-pr.yaml)
-   will run the new cells as advisory checks. `check-default-cell` is the
+   will run the new cells as advisory checks. `default-cell-required` is the
    required status check; the rest of the matrix runs `continue-on-error`.
-   The per-cell summary table is rendered on the `matrix-report` job's page
-   (GitHub step summary) and the full reports are uploaded as the
+   The per-cell summary table is rendered on the `publish-matrix-summary`
+   job's page (GitHub step summary) and the full reports are uploaded as the
    `matrix-reports` artifact — both work on fork PRs, where a PR comment
    can't be posted with the read-only token.
 

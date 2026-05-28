@@ -904,14 +904,22 @@ on:
 
 Jobs:
 
-1. `emission-matrix` — runs `nox -s emission` (full matrix in-process; ~10 min).
-2. `matrix-report` — needs `emission-matrix`; aggregates `reports/cells/*.json`,
-   posts the PR comment.
-3. `check-default-cell` — separate job that only runs the `defaultCell`. The
-   required status check on the PR.
+1. `verify-contract-and-manifest` — `make check-contract-drift` (generated
+   schemas vs observer parsers) + `make check-matrix-manifest` (matrix ⊇
+   release-config). Gates the rest.
+2. `default-cell-required` — runs only the `defaultCell`. The required status
+   check on the PR.
+3. `full-emission-matrix` — runs `nox -s emission` (every cell; advisory,
+   `continue-on-error`).
+4. `publish-matrix-summary` — needs `full-emission-matrix` +
+   `default-cell-required`; aggregates `reports/cells/*.json` and renders the
+   summary table to the job's GitHub step-summary page (not a PR comment —
+   fork PRs get a read-only token that can't comment).
+5. `scan-cassettes-for-secrets` — greps committed cassettes for leaked keys.
 
-A required check on `emission-matrix` overall would let a single advisory cell
-block the PR. Splitting keeps the required check stable.
+A required check on `full-emission-matrix` overall would let a single advisory
+cell block the PR. Keeping `default-cell-required` separate keeps the required
+check stable.
 
 ### 11.3 Tier 2 — Nightly workflow
 
@@ -953,7 +961,7 @@ on:
 OPENAI/ANTHROPIC key from a CI secret, and opens a follow-up PR with the
 re-recorded cassettes for review.
 
-### 11.5 PR comment format
+### 11.5 Summary format (rendered to the run's step-summary page)
 
 ```
 ## Instrumentation matrix — emission tier
@@ -972,12 +980,12 @@ Total: 96 pass · 1 fail · 3 skipped · 0 advisory failing required check
 
 ### 11.6 Required-status table
 
-| Workflow         | Required check          | What blocks the PR / triggers alerts          |
-| ---              | ---                     | ---                                           |
-| Tier 1 (PR)      | `check-default-cell`    | Default cell broken.                          |
-| Tier 1 (PR)      | `matrix-report` posts   | Informational only.                           |
-| Tier 2 (nightly) | none — runs on main     | Failures open an issue + Chat message.        |
-| Tier 3 (manual)  | none — operator-driven  | Operator decides next step from the report.   |
+| Workflow         | Required check              | What blocks the PR / triggers alerts          |
+| ---              | ---                         | ---                                           |
+| Tier 1 (PR)      | `default-cell-required`     | Default cell broken.                          |
+| Tier 1 (PR)      | `publish-matrix-summary`    | Informational only.                           |
+| Tier 2 (nightly) | none — runs on main         | Failures open an issue + Chat message.        |
+| Tier 3 (manual)  | none — operator-driven      | Operator decides next step from the report.   |
 
 ### 11.7 Concurrency
 
