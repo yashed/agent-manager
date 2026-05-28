@@ -22,7 +22,7 @@ emit spans the observer can parse" — across the combinations declared in
   validated against a live stack; see §7.)
 
 It is **not** a correctness test of the agents themselves, a load test, or a
-console/UI test — it asserts the *shape* of instfinintmatieemitted telemetry, nothing more.
+console/UI test — it asserts the *shape* of emitted telemetry, nothing more.
 
 ## 2. Add a framework, a framework version, or a Traceloop version
 
