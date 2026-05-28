@@ -56,9 +56,24 @@ runs:
         # from source into k3d.
         make setup-openchoreo
         # Build + start the core platform (agent-manager-service via compose).
-        make setup-platform
+        # COMPOSE_SERVICES restricts the compose bring-up to the service (+ its
+        # postgres dependency), skipping the slow console image the heavy tier
+        # doesn't use.
+        COMPOSE_SERVICES=agent-manager-service make setup-platform
+        # dev-migrate runs `go run -migrate` on the host (not in the compose
+        # container) and loads agent-manager-service/.env via ENV_FILE_PATH.
+        # That file is gitignored, so seed it from the tracked example — its DB
+        # creds match the compose-exposed Postgres on localhost:5432.
+        cp agent-manager-service/.env.example agent-manager-service/.env
         make dev-migrate
-        # Expose AMP API (9000) + traces-observer (9098) on localhost.
-        (cd deployments/scripts && ./port-forward.sh --platform --background)
+        # setup-platform started the service against a fresh, unmigrated DB, so
+        # it crashed on the missing schema and Air won't restart it on its own.
+        # Now that migrations have run, restart it so it boots cleanly. (Locally
+        # this is masked by a pre-populated postgres volume.)
+        docker compose -f deployments/docker-compose.yml restart agent-manager-service
+        # Expose AMP API (9000) + traces-observer (9098). Bind 0.0.0.0 so the
+        # agent-manager container can reach the forwards via the bridge gateway
+        # (a 127.0.0.1-only forward is unreachable from inside the container).
+        (cd deployments/scripts && PORT_FORWARD_ADDRESS=0.0.0.0 ./port-forward.sh --platform --background)
         make setup-gateway
-        (cd deployments/scripts && ./port-forward.sh --background)
+        (cd deployments/scripts && PORT_FORWARD_ADDRESS=0.0.0.0 ./port-forward.sh --background)

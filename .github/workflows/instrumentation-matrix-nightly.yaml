@@ -7,7 +7,7 @@ name: Instrumentation matrix — nightly
 
 on:
   schedule:
-    - cron: '30 3 * * *'             # 03:30 UTC / 09:00 IST — matches traceloop-release-watch
+    - cron: '30 20 * * *'            # 20:30 UTC / 02:00 IST
   workflow_dispatch:
 
 permissions:
@@ -64,7 +64,8 @@ jobs:
           python-version: '3.11'
       # requests: heavy/driver.py + amp_client/observer use it for the
       # AMP REST + observer calls (the emission tier never makes live calls).
-      - run: pip install nox pyyaml requests
+      # jsonschema: harness.validator validates spans against the contract.
+      - run: pip install nox pyyaml requests jsonschema
       - name: Run heavy tier
         working-directory: test/instrumentation-matrix
         # Service URLs + IDP creds default to the dev bring-up's values
@@ -73,6 +74,8 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The deployed customer-support-agent's web-search tool needs this.
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: nox -s heavy
       - uses: actions/upload-artifact@v4
         if: always()
