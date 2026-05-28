@@ -22,6 +22,7 @@ validates this end to end.
 """
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -31,19 +32,35 @@ import requests
 # Timeout budget (see RUNBOOK.md §7).
 _BUILD_TIMEOUT_S = 600
 _BUILD_POLL_S = 10
-_DEPLOY_TIMEOUT_S = 300
+_DEPLOY_TIMEOUT_S = 600
 _DEPLOY_POLL_S = 10
+# Consecutive "failed" polls before giving up (tolerates a transient failed
+# during reconciliation while still bailing fast on a genuinely stuck deploy).
+_DEPLOY_FAILED_STREAK = 3
 _HTTP_TIMEOUT_S = 30
 _TOKEN_REFRESH_SKEW_S = 30
 
+# AMP caps resource names at 25 chars (utils.MaxResourceNameLength); when a
+# cell id exceeds it, _safe_name keeps a prefix plus this many hash chars.
+_MAX_NAME_LEN = 25
+_HASH_LEN = 6
+
 
 def _safe_name(cell_id: str) -> str:
-    """Coerce a cell id into an AMP project/agent name: lowercase, and only
-    `[a-z0-9-]` (cell ids carry dots in versions, which AMP names reject)."""
-    out = []
-    for ch in cell_id.lower():
-        out.append(ch if (ch.isalnum() or ch == "-") else "-")
-    return "".join(out).strip("-")
+    """Coerce a cell id into an AMP project/agent name.
+
+    AMP enforces RFC 1035 DNS labels (agent-manager-service
+    utils.ValidateResourceName): at most 25 chars, only `[a-z0-9-]`, starts
+    with a letter, ends alphanumeric. Cell ids carry dotted versions and run
+    ~47 chars, so fold non-alnum to `-` and, when too long, keep a readable
+    prefix plus a short stable hash — deterministic so teardown reuses the
+    same name, and collision-resistant when prefixes coincide."""
+    slug = "".join(ch if (ch.isalnum() or ch == "-") else "-" for ch in cell_id.lower()).strip("-")
+    if len(slug) <= _MAX_NAME_LEN:
+        return slug
+    digest = hashlib.sha1(cell_id.encode()).hexdigest()[:_HASH_LEN]
+    prefix = slug[: _MAX_NAME_LEN - _HASH_LEN - 1].strip("-")
+    return f"{prefix}-{digest}"
 
 
 def _utc_rfc3339(*, hours_from_now: int) -> str:
@@ -223,7 +240,10 @@ class AmpClient:
         )
 
         image_id = self._wait_for_build(org, name)
-        self._deploy(org, name, image_id)
+        # No explicit deploy: creating an internal agent auto-triggers build and
+        # deploy (mirroring test/e2e's shared-agent setup, which only waits).
+        # A redundant POST /deployments re-renders the workload without the
+        # sensitive env, dropping the SecretReference and failing the binding.
         endpoint = self._wait_for_active_endpoint(org, name)
         api_key = self._mint_api_key(org, name)
 
@@ -264,13 +284,6 @@ class AmpClient:
             time.sleep(_BUILD_POLL_S)
         raise TimeoutError(f"build {build_name} did not complete within {_BUILD_TIMEOUT_S}s")
 
-    def _deploy(self, org: str, name: str, image_id: str) -> None:
-        self._request(
-            "POST", f"/api/v1/orgs/{org}/projects/{name}/agents/{name}/deployments",
-            json={"imageId": image_id, "enableAutoInstrumentation": True},
-            expect=(202,),
-        )
-
     def _wait_for_active_endpoint(self, org: str, name: str) -> str:
         # FIRST-RUN-TUNABLE: reads the endpoint URL from the deployments
         # response (`endpoints[].url`). The e2e suite instead reads it from
@@ -278,17 +291,35 @@ class AmpClient:
         # turns out not to carry the URL, switch to that endpoint here.
         path = f"/api/v1/orgs/{org}/projects/{name}/agents/{name}/deployments"
         deadline = time.monotonic() + _DEPLOY_TIMEOUT_S
+        last_seen = "<no deployments response>"
+        failed_streak = 0
         while time.monotonic() < deadline:
             deployments = self._request("GET", path, expect=(200,)).json()
             dep = deployments.get(self.environment)
-            if dep and dep.get("status") == "active":
-                endpoints = dep.get("endpoints") or []
-                if endpoints:
-                    return endpoints[0]["url"]
-                raise AmpError(f"{name} active but exposes no endpoint")
+            if dep is None:
+                last_seen = f"env {self.environment!r} absent; present={list(deployments)}"
+                failed_streak = 0
+            else:
+                status = dep.get("status")
+                last_seen = f"status={status!r}"
+                if status == "active":
+                    endpoints = dep.get("endpoints") or []
+                    if endpoints:
+                        return endpoints[0]["url"]
+                    raise AmpError(f"{name} active but exposes no endpoint")
+                # Tolerate a transient failed during reconciliation (the e2e
+                # suite polls through non-active states); bail only once it
+                # persists, so a genuinely stuck deploy fails fast.
+                if status == "failed":
+                    failed_streak += 1
+                    if failed_streak >= _DEPLOY_FAILED_STREAK:
+                        raise AmpError(f"{name} deployment failed in {self.environment}")
+                else:
+                    failed_streak = 0
             time.sleep(_DEPLOY_POLL_S)
         raise TimeoutError(
-            f"{name} not active in {self.environment} within {_DEPLOY_TIMEOUT_S}s"
+            f"{name} not active in {self.environment} within {_DEPLOY_TIMEOUT_S}s "
+            f"(last: {last_seen})"
         )
 
     def _mint_api_key(self, org: str, name: str) -> str:

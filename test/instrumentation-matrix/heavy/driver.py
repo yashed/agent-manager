@@ -22,6 +22,7 @@ tune on first run.
 from __future__ import annotations
 
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -54,11 +55,20 @@ _DEFAULTS = {
     "IDP_CLIENT_SECRET": "amp-api-client-secret",
 }
 
-# LLM keys the deployed agent needs to make real calls. Forwarded as
-# sensitive env vars into each agent at create time; absent keys are simply
-# not forwarded (a cell whose framework needs one will then fail its call,
-# which the matrix surfaces).
-_LLM_ENV_KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+# Secrets the deployed sample agent needs to start and make real calls:
+# the LLM provider keys plus TAVILY_API_KEY (the customer-support-agent's
+# web-search tool fails construction without it). Forwarded as sensitive env
+# vars at create time; absent keys are simply not forwarded.
+_AGENT_SECRET_ENV_KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TAVILY_API_KEY")
+
+# Heavy deploys ONE representative agent (samples/customer-support-agent, a
+# LangChain/LangGraph app) for every cell, so it asserts the kinds THAT agent
+# emits — not each cell's framework kinds (which would need a deployable agent
+# per framework; see RUNBOOK §7). We require the llm span (every chat turn
+# makes a model call); the richer kinds it also emits (agent/chain/embedding)
+# are shape-validated when present via validate_all and surfaced in the
+# coverage "actual" list. Per-framework span shape is the emission tier's job.
+_DEPLOYED_AGENT_SPAN_KINDS = ["llm"]
 
 
 def _env(name: str) -> str:
@@ -69,6 +79,18 @@ def main() -> int:
     m = load_manifest(HERE / "matrix.yaml")
     cells = select_heavy_subset(expand_matrix(m), m)
 
+    # Optional single-cell filter for cheap iteration: set HEAVY_CELL_ID to a
+    # cell id from the heavy subset to run just that one. Empty/unset runs all.
+    only = os.environ.get("HEAVY_CELL_ID", "").strip()
+    if only:
+        cells = [c for c in cells if c.id == only]
+        if not cells:
+            print(
+                f"HEAVY_CELL_ID={only!r} matched no cell in the heavy subset",
+                file=sys.stderr,
+            )
+            return 1
+
     client = AmpClient(
         base_url=_env("AMP_API_BASE_URL"),
         idp=IdpCredentials(
@@ -78,7 +100,7 @@ def main() -> int:
         ),
     )
     observer_base_url = _env("TRACES_OBSERVER_BASE_URL")
-    agent_env = {k: os.environ[k] for k in _LLM_ENV_KEYS if os.environ.get(k)}
+    agent_env = {k: os.environ[k] for k in _AGENT_SECRET_ENV_KEYS if os.environ.get(k)}
 
     reports_dir = HERE / "reports" / "heavy"
     overall_fail = False
@@ -95,7 +117,7 @@ def main() -> int:
                 category="pipeline-error",
                 skip_reason=None,
                 durations={},
-                coverage={"expected": cell.span_kinds, "actual": [], "missing": cell.span_kinds},
+                coverage={"expected": _DEPLOYED_AGENT_SPAN_KINDS, "actual": [], "missing": _DEPLOYED_AGENT_SPAN_KINDS},
                 violations=[{"spanName": "", "kind": "", "rule": "driver",
                              "path": "", "message": f"{type(e).__name__}: {e}"}],
                 captured_spans=[],
@@ -118,7 +140,7 @@ def _run_cell(
             category=None,
             skip_reason="no instrumentation_version (manual provider)",
             durations={},
-            coverage={"expected": cell.span_kinds, "actual": [], "missing": []},
+            coverage={"expected": _DEPLOYED_AGENT_SPAN_KINDS, "actual": [], "missing": []},
             violations=[],
             captured_spans=[],
         )
@@ -146,9 +168,9 @@ def _run_cell(
             skip_reason=None,
             durations={},
             coverage={
-                "expected": cell.span_kinds,
+                "expected": _DEPLOYED_AGENT_SPAN_KINDS,
                 "actual": [],
-                "missing": cell.span_kinds,
+                "missing": _DEPLOYED_AGENT_SPAN_KINDS,
             },
             violations=[],
             captured_spans=[],
@@ -156,7 +178,7 @@ def _run_cell(
 
     provider = PROVIDERS[cell.provider_name]
     validator = ContractValidator.load(provider.contract_schema_id())
-    coverage = validator.assert_coverage(spans, expected_kinds=cell.span_kinds)
+    coverage = validator.assert_coverage(spans, expected_kinds=_DEPLOYED_AGENT_SPAN_KINDS)
     shape_results = validator.validate_all(spans)
     violations = [
         {
@@ -171,7 +193,7 @@ def _run_cell(
     ]
 
     base_coverage = {
-        "expected": cell.span_kinds,
+        "expected": _DEPLOYED_AGENT_SPAN_KINDS,
         "actual": sorted(coverage.actual),
         "missing": sorted(coverage.missing),
     }

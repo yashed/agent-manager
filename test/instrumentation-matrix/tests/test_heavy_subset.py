@@ -56,16 +56,19 @@ def _multi_manifest() -> Manifest:
     )
 
 
-def test_subset_covers_each_traceloop_version_once_and_each_framework_once():
+def test_subset_covers_each_traceloop_version_on_the_default_framework():
     m = _multi_manifest()
     cells = expand_matrix(m)
     sub = select_heavy_subset(cells, m)
     versions = {(c.provider_version, c.framework_name) for c in sub}
-    # per-traceloop axis: each version paired with the default framework.
+    # One cell per Traceloop version, all on the default framework — that's the
+    # only axis that changes the deployed init-container.
     assert ("0.60.0", "langchain") in versions
     assert ("0.61.0", "langchain") in versions
-    # per-framework axis: each framework paired with the default traceloop.
-    assert ("0.60.0", "crewai") in versions
+    # Heavy deploys one representative agent, so there is NO per-framework
+    # axis: non-default frameworks (crewai) are not in the subset.
+    assert all(c.framework_name == "langchain" for c in sub)
+    assert ("0.60.0", "crewai") not in versions
 
 
 def test_subset_deduplicates_overlapping_axes():

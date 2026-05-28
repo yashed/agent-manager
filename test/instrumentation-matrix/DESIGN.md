@@ -755,9 +755,24 @@ nox -s emission
 
 ### 9.2 Cell subset
 
-Declared in `matrix.yaml.heavyTier`. Currently ~3 Traceloop versions × 1
-default framework + 6 frameworks × 1 default combo ≈ **8–10 cells**. Wall
-time on parallel runners: ~1 h.
+Heavy is a **pipeline test, not a per-framework test**: it deploys one
+representative agent (`samples/customer-support-agent`, a LangChain/LangGraph
+app) and verifies its spans survive the full deployed path. That path is
+framework-agnostic, so the subset (`harness/heavy_subset.py`) is **one cell
+per Traceloop/instrumentation version**, on the default framework + python —
+the only axis that changes the deployed init-container. With a single Traceloop
+version today that's one cell; it grows as versions are added.
+
+There is deliberately **no per-framework axis**. Deploying the same agent
+under a `crewai` / `llama-index` label proves nothing about those frameworks,
+and asserting their span kinds (e.g. `crewaitask`) against a LangGraph agent
+can never pass. So the driver asserts the kinds the *deployed agent* emits
+(`heavy/driver.py:_DEPLOYED_AGENT_SPAN_KINDS` — the `llm` span, plus
+shape-validation of every captured span), **not** each cell's framework kinds.
+Per-framework span *shape* is the emission tier's job (§5). True per-framework
+heavy coverage would require a deployable agent app per framework — the
+`cells/*_sample.py` are in-process scripts, not deployable buildpack apps —
+which is tracked as future work (e.g. a deployable `crewai` sample).
 
 ### 9.3 Infra
 
@@ -790,11 +805,14 @@ k3d on a GHA-hosted runner (default) with a self-hosted-runner escape hatch.
 
 Agents are deployed through `agent-manager-service`'s REST API (the same
 flow `test/e2e/framework/shared_agent.go` uses), not raw Kubernetes
-Workload manifests. The build request carries the cell's
-`instrumentation_version`, `framework_package==framework_version`, and
-`python_version`; `agent-manager-service` picks the right init-container
-image and patches `requirements.txt` before the build. The driver records
-the deployed agent's `(org, project, agent, environment)` on a
+Workload manifests. Creating the agent auto-triggers build + deploy (the
+driver does not POST a separate deployment — a redundant deploy re-renders
+the workload without the secret env and breaks the binding). The request
+pins the cell's `instrumentation_version` (selecting the init-container
+image) and `python_version` (the buildpack language version); the framework
+rides only as an informational `AMP_MATRIX_FRAMEWORK` env var, since the
+deployed sample's own `requirements.txt` defines its framework. The driver
+records the deployed agent's `(org, project, agent, environment)` on a
 `DeployedAgent` record so the subsequent observer poll has the keys
 `GET /api/v1/traces` requires.
 
