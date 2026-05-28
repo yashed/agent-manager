@@ -33,8 +33,7 @@ on:
         default: false
 
 permissions:
-  contents: write          # needed when include_record_mode opens a PR
-  pull-requests: write
+  contents: read   # open-record-pr escalates to write at the job level
 
 concurrency:
   group: instrumentation-matrix-manual-${{ github.run_id }}
@@ -109,6 +108,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: run-cells
     if: ${{ inputs.include_record_mode }}
+    permissions:
+      contents: write        # push the refresh branch
+      pull-requests: write   # open the cassette-refresh PR
     steps:
       - uses: actions/checkout@v4
         with:

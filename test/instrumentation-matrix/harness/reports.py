@@ -53,10 +53,16 @@ def load_cell_report(path: Path) -> dict[str, Any]:
     """
     data = json.loads(Path(path).read_text())
     blob = data.get("capturedSpans") or ""
+    spans: list = []
     if blob:
-        spans = json.loads(gzip.decompress(base64.b64decode(blob)).decode("utf-8"))
-    else:
-        spans = []
+        try:
+            spans = json.loads(gzip.decompress(base64.b64decode(blob)).decode("utf-8"))
+        except (ValueError, OSError, gzip.BadGzipFile):
+            # A truncated/corrupt blob shouldn't crash triage — treat as no
+            # decoded spans (the raw blob is still on `data` for inspection).
+            spans = []
     data["capturedSpansDecoded"] = spans
-    data["capturedSpansAttributes"] = [s.get("attributes", {}) or {} for s in spans]
+    data["capturedSpansAttributes"] = [
+        s.get("attributes", {}) or {} for s in spans if isinstance(s, dict)
+    ]
     return data

@@ -99,8 +99,8 @@ def test_emission_cell():
 
     module_name = sample_path.stem
     spec = importlib.util.spec_from_file_location(module_name, sample_path)
+    assert spec is not None and spec.loader is not None, f"cannot load sample {sample_path}"
     sample = importlib.util.module_from_spec(spec)
-    assert spec is not None and spec.loader is not None
     sys.modules[module_name] = sample
 
     t0 = time.monotonic()

@@ -83,7 +83,23 @@ def main() -> int:
     reports_dir = HERE / "reports" / "heavy"
     overall_fail = False
     for cell in cells:
-        result = _run_cell(cell, client, observer_base_url, agent_env)
+        try:
+            result = _run_cell(cell, client, observer_base_url, agent_env)
+        except Exception as e:  # noqa: BLE001 - one cell's failure must not abort the rest
+            # deploy/invoke/poll raise (AmpError, TimeoutError, transport) —
+            # record the cell as a pipeline failure and keep going so the
+            # remaining cells still run and report.
+            result = CellResult(
+                cell_id=cell.id,
+                result="fail",
+                category="pipeline-error",
+                skip_reason=None,
+                durations={},
+                coverage={"expected": cell.span_kinds, "actual": [], "missing": cell.span_kinds},
+                violations=[{"spanName": "", "kind": "", "rule": "driver",
+                             "path": "", "message": f"{type(e).__name__}: {e}"}],
+                captured_spans=[],
+            )
         write_cell_report(result, reports_dir=reports_dir)
         if result.result == "fail":
             overall_fail = True

@@ -74,7 +74,7 @@ to onboard" should be **a single CI run**, not a triage epic.
 A Python-based, manifest-driven, two-tier compatibility harness at
 `test/instrumentation-matrix/`.
 
-```
+```text
                           matrix.yaml
                   (providers × versions × frameworks
                        × versions × python)

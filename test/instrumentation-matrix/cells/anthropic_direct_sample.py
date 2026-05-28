@@ -3,7 +3,7 @@
 No framework — exercises Traceloop's instrumentation of the anthropic client
 itself. One messages.create call, deterministic via temperature=0.
 
-Cassette: cassettes/anthropic-direct/messages.yaml.
+Cassette: cassettes/anthropic-direct/test_emission_cell.yaml.
 """
 from __future__ import annotations
 

@@ -5,7 +5,7 @@ two sequential tasks. Exercises the agent (×2), crewaitask (×2), llm (×N) and
 tool span kinds in a single trace. Deterministic: temperature is fixed by the
 default crew settings + the tool returns a constant string.
 
-Cassette: cassettes/crewai/multi_agent.yaml.
+Cassette: cassettes/crewai/test_emission_cell.yaml.
 """
 from __future__ import annotations
 

@@ -4,7 +4,7 @@ A two-node graph: an LLM with one bound tool, plus a ToolNode. The LLM is
 prompted in a way that forces a tool call, the tool executes, then the LLM
 produces a final answer. Covers the llm + tool span kinds in the same trace.
 
-Cassette: cassettes/langgraph/agent_with_tools.yaml.
+Cassette: cassettes/langgraph/test_emission_cell.yaml.
 """
 from __future__ import annotations
 

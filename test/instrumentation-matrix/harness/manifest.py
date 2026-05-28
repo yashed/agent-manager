@@ -177,10 +177,13 @@ def expand_matrix(manifest: Manifest) -> list[Cell]:
                                 framework_version=fver,
                                 framework_package=fw.package,
                                 sample_path=fw.sample_path,
-                                span_kinds=fw.span_kinds,
+                                # Copy the framework's lists so cells don't
+                                # share a mutable instance (a mutation on one
+                                # cell would otherwise leak into all of them).
+                                span_kinds=list(fw.span_kinds),
                                 python=py,
                                 contract_schema=provider.contract_schema,
-                                extras=fw.extras,
+                                extras=list(fw.extras),
                                 instrumentation_version=(
                                     provider.instrumentation_versions.get(pver)
                                 ),

@@ -4,7 +4,7 @@ A tiny in-memory document store + OpenAI embeddings + OpenAI chat. The
 embedding call exercises the embedding span kind; the chat call exercises
 the LLM span kind. Deterministic via temperature=0.
 
-Cassette: cassettes/llama-index/rag_pipeline.yaml.
+Cassette: cassettes/llama-index/test_emission_cell.yaml.
 """
 from __future__ import annotations
 

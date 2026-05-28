@@ -128,7 +128,7 @@ The `category` tells you whose problem it likely is (design §12.1):
 
 **Example — a red row + its diff.** The summary shows:
 
-```
+```text
 | ❌ traceloop-0.60.0-crewai-1.1.0-py3.11 | fail | missing-span-kind: missing ['tool'] |
 ```
 

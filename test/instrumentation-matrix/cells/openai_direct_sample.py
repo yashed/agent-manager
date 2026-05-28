@@ -3,7 +3,7 @@
 No framework — exercises Traceloop's instrumentation of the openai client
 itself. One chat.completions.create call, deterministic via temperature=0.
 
-Cassette: cassettes/openai-direct/chat.yaml.
+Cassette: cassettes/openai-direct/test_emission_cell.yaml.
 """
 from __future__ import annotations
 

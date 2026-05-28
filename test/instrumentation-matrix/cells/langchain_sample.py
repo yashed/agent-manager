@@ -1,7 +1,7 @@
 """Minimal LangChain agent sample for the matrix.
 
 Single-turn LLM call via langchain_openai.ChatOpenAI. Deterministic content
-(temperature=0, fixed prompt). Recorded in cassettes/langchain/llm_chat_completion.yaml.
+(temperature=0, fixed prompt). Recorded in cassettes/langchain/test_emission_cell.yaml.
 """
 from __future__ import annotations
 

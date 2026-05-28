@@ -19,7 +19,7 @@ def reset_opensearch_indices() -> None:
     means the index reset didn't land, which the driver detects later when
     polling traces returns stale results.
     """
-    subprocess.run(
+    proc = subprocess.run(
         [
             "kubectl",
             "-n",
@@ -33,5 +33,13 @@ def reset_opensearch_indices() -> None:
             "DELETE",
             "http://localhost:9200/spans-*",
         ],
-        check=False,
+        capture_output=True,
+        text=True,
     )
+    if proc.returncode != 0:
+        # Best-effort, but don't swallow silently — a failed reset means the
+        # next cell may see stale spans, which is worth a visible warning.
+        print(
+            f"::warning::OpenSearch index reset failed (rc={proc.returncode}): "
+            f"{(proc.stderr or proc.stdout).strip()[:300]}"
+        )

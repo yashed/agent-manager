@@ -60,12 +60,27 @@ def poll_traces(
 
     deadline = time.monotonic() + timeout_s
     trace_ids: list[str] = []
+    got_clean_response = False
+    last_error: str | None = None
     while time.monotonic() < deadline:
-        trace_ids = _list_trace_ids(session, client, base, deployed, start_time, end_time)
+        trace_ids, err = _list_trace_ids(session, client, base, deployed, start_time, end_time)
+        if err is None:
+            got_clean_response = True
+        else:
+            last_error = err
         if trace_ids:
             break
         time.sleep(_POLL_S)
     if not trace_ids:
+        # Distinguish "observer answered 200 but no traces" (genuinely empty →
+        # the driver maps [] to no-spans-captured) from "every list call
+        # errored" (transport/HTTP problem → raise so the driver records a
+        # pipeline-error, not a misleading no-spans-captured).
+        if not got_clean_response:
+            raise RuntimeError(
+                f"trace listing never succeeded within {timeout_s}s "
+                f"(last error: {last_error})"
+            )
         return []
 
     spans: list[dict] = []
@@ -88,23 +103,29 @@ def _auth_get(session, client: AmpClient, url: str, params: dict | None = None):
     )
 
 
-def _list_trace_ids(session, client, base, deployed, start_time, end_time) -> list[str]:
-    resp = _auth_get(
-        session, client, f"{base}/api/v1/traces",
-        params={
-            "organization": deployed.org,
-            "project": deployed.project_name,
-            "agent": deployed.agent_name,
-            "environment": deployed.environment,
-            "startTime": start_time,
-            "endTime": end_time,
-            "limit": 50,
-            "sortOrder": "desc",
-        },
-    )
+def _list_trace_ids(session, client, base, deployed, start_time, end_time):
+    """Returns (trace_ids, error). error is None on a clean 200; a short
+    string on transport/HTTP failure so the caller can tell "empty" from
+    "broken"."""
+    try:
+        resp = _auth_get(
+            session, client, f"{base}/api/v1/traces",
+            params={
+                "organization": deployed.org,
+                "project": deployed.project_name,
+                "agent": deployed.agent_name,
+                "environment": deployed.environment,
+                "startTime": start_time,
+                "endTime": end_time,
+                "limit": 50,
+                "sortOrder": "desc",
+            },
+        )
+    except requests.RequestException as e:
+        return [], f"request failed: {e}"
     if resp.status_code != 200:
-        return []
-    return [t["traceId"] for t in resp.json().get("traces", [])]
+        return [], f"status {resp.status_code}: {resp.text[:200]}"
+    return [t["traceId"] for t in resp.json().get("traces", [])], None
 
 
 def _list_span_ids(session, client, base, deployed, trace_id, start_time, end_time) -> list[str]:
