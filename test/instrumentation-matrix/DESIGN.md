@@ -74,6 +74,41 @@ to onboard" should be **a single CI run**, not a triage epic.
 A Python-based, manifest-driven, two-tier compatibility harness at
 `test/instrumentation-matrix/`.
 
+```
+                          matrix.yaml
+                  (providers × versions × frameworks
+                       × versions × python)
+                              │
+                              ▼
+                   harness.expand_matrix()  ──►  list of Cells
+                              │
+              ┌───────────────┴───────────────────────┐
+              ▼                                        ▼
+   ┌──────────────────────┐               ┌────────────────────────────┐
+   │  EMISSION TIER        │               │  HEAVY TIER (subset)        │
+   │  every relevant PR    │               │  nightly / on-demand        │
+   │                       │               │                            │
+   │  per-cell venv        │               │  build AMP from source     │
+   │  + provider bootstrap │               │  on k3d (make setup)       │
+   │  + VCR cassette       │               │  deploy agent → /chat      │
+   │  → InMemoryExporter   │               │  → traces-observer poll    │
+   └──────────┬───────────┘               └──────────────┬─────────────┘
+              │            captured spans                 │
+              └───────────────┬────────────────────────────┘
+                              ▼
+                  ContractValidator  ◄────  contracts/traceloop/v1/
+                  (coverage + shape)        (generated from the observer's
+                              │              parsers — see §6)
+                              ▼
+                  per-cell JSON reports  ──►  summary + triage diffs
+                                              (PR step-summary / nightly
+                                               issue + Chat alert)
+```
+
+Both tiers feed the **same** `ContractValidator` against the **same**
+generated schema — emission asks "does the SDK still emit conforming spans?",
+heavy asks "do they survive the real pipeline and enrich correctly?"
+
 ### 3.1 Two tiers, two questions
 
 | Tier        | Question it answers                                                              | Per-cell cost | Where it runs                                                                            |

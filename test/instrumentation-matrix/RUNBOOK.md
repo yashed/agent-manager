@@ -41,12 +41,42 @@ All three are edits to [`matrix.yaml`](./matrix.yaml):
   tier — see §7). `make check-matrix-manifest` enforces that this map covers
   every version `release-config.json` currently ships.
 
+**Example — add a new framework (`haystack`):**
+
+```yaml
+# matrix.yaml → frameworks:
+  - name: haystack
+    provider: traceloop          # restrict to the auto-instrumentation provider
+    package: haystack-ai
+    versions: ["2.8.0"]
+    samplePath: cells/haystack_sample.py
+    spanKinds: [llm]             # what the observer should classify out of it
+    extras: [haystack-ai, openai]  # extra pip installs the sample needs
+```
+
+Then add `cells/haystack_sample.py` (a `run_scenario()` that drives one LLM
+call — copy `cells/langchain_sample.py`) and record its cassette:
+
+```bash
+OPENAI_API_KEY=sk-... python scripts/record_cassette.py haystack llm
+```
+
+**Example — add a Traceloop version (`0.61.0`):**
+
+```yaml
+# matrix.yaml → providers.traceloop:
+    versions: ["0.60.0", "0.61.0"]          # add the new one
+    instrumentationVersions:
+      "0.60.0": "0.2.1"
+      "0.61.0": "0.3.0"                      # ← the init-container instr version
+```
+
 After any edit, sanity-check locally:
 
 ```bash
 cd test/instrumentation-matrix
-nox -s emission -- --cell-id=<the-new-cell-id>     # one cell
-nox -s emission -k <framework>                      # all cells for a framework
+nox -s emission -- --cell-id=traceloop-0.61.0-langchain-0.3.27-py3.11   # one cell
+nox -s emission -k haystack                                             # by framework
 ```
 
 ## 3. Onboard a new Traceloop release (the canary workflow)
@@ -96,6 +126,28 @@ The `category` tells you whose problem it likely is (design §12.1):
 (provider or observer), `cassette-miss` (sample or provider),
 `pipeline-error` / `infra-error` (heavy-tier infra/observer).
 
+**Example — a red row + its diff.** The summary shows:
+
+```
+| ❌ traceloop-0.60.0-crewai-1.1.0-py3.11 | fail | missing-span-kind: missing ['tool'] |
+```
+
+and `reports/diffs/traceloop-0.60.0-crewai-1.1.0-py3.11.diff.md` shows which
+required keys were present vs missing:
+
+```
+## Required attributes vs captured
+| Required key            | Status      |
+| ---                     | ---         |
+| gen_ai.request.model    | present     |
+| traceloop.span.kind     | present     |
+| (tool-kind span)        | **MISSING** |
+```
+
+→ category `missing-span-kind` points at the provider (partial
+instrumentation). Reading the diff is usually enough to reach a verdict
+without reproducing locally.
+
 If a regression is upstream and you can't fix it now, record it in
 [`FINDINGS.md`](./FINDINGS.md) with an `F-NNN` id and gate the cell with
 `known-broken` (§6).
@@ -138,6 +190,23 @@ When a cell exposes a regression you can't fix immediately:
    pattern (a subset of `provider`/`providerVersion`/`framework`/
    `frameworkVersion`/`python` — missing keys widen the match), a `reason`,
    and an `until:` ISO date.
+
+   ```yaml
+   # matrix.yaml → known-broken:
+     # gate one specific cell:
+     - cell:
+         provider: traceloop
+         providerVersion: "0.61.0"
+         framework: crewai
+         frameworkVersion: "1.1.0"
+       reason: "F-011: traceloop 0.61 drops crewai tool spans"
+       until: "2026-09-01"
+     # …or widen by omitting keys — this gates ALL crewai cells on 0.61:
+     - cell: { provider: traceloop, providerVersion: "0.61.0", framework: crewai }
+       reason: "F-011"
+       until: "2026-09-01"
+   ```
+
 2. The matrix still expands and reports the cell, but as
    `skipped-known-broken`, so it doesn't block the PR.
 3. Nightly, the `revalidate-known-broken` job re-runs every known-broken cell
