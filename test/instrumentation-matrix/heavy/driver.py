@@ -75,6 +75,23 @@ def _env(name: str) -> str:
     return os.environ.get(name, _DEFAULTS[name])
 
 
+def _log(msg: str) -> None:
+    # flush=True so progress streams live to the CI log — stdout is block-
+    # buffered off a TTY, which would otherwise dump everything at the end.
+    print(msg, flush=True)
+
+
+def _outcome(r: CellResult) -> str:
+    if r.result == "pass":
+        return f"✅ pass ({','.join(r.coverage.get('actual', []))})"
+    if r.result == "skipped":
+        return f"⊘ skipped — {r.skip_reason}"
+    detail = ""
+    if r.violations:
+        detail = ": " + (r.violations[0].get("message") or "").strip()
+    return f"❌ fail ({r.category}){detail}"
+
+
 def main() -> int:
     m = load_manifest(HERE / "matrix.yaml")
     cells = select_heavy_subset(expand_matrix(m), m)
@@ -103,8 +120,11 @@ def main() -> int:
     agent_env = {k: os.environ[k] for k in _AGENT_SECRET_ENV_KEYS if os.environ.get(k)}
 
     reports_dir = HERE / "reports" / "heavy"
-    overall_fail = False
-    for cell in cells:
+    total = len(cells)
+    _log(f"heavy tier: running {total} cell(s)")
+    passed = failed = skipped = 0
+    for idx, cell in enumerate(cells, 1):
+        _log(f"[{idx}/{total}] {cell.id}")
         try:
             result = _run_cell(cell, client, observer_base_url, agent_env)
         except Exception as e:  # noqa: BLE001 - one cell's failure must not abort the rest
@@ -123,9 +143,15 @@ def main() -> int:
                 captured_spans=[],
             )
         write_cell_report(result, reports_dir=reports_dir)
+        _log("      " + _outcome(result))
         if result.result == "fail":
-            overall_fail = True
-    return 1 if overall_fail else 0
+            failed += 1
+        elif result.result == "skipped":
+            skipped += 1
+        else:
+            passed += 1
+    _log(f"heavy summary: {passed} passed, {failed} failed, {skipped} skipped")
+    return 1 if failed else 0
 
 
 def _run_cell(
@@ -145,6 +171,7 @@ def _run_cell(
             captured_spans=[],
         )
 
+    _log(f"      deploying (instr {cell.instrumentation_version}, py{cell.python})…")
     k3d.reset_opensearch_indices()
     deployed = client.deploy_agent(
         cell_id=cell.id,
@@ -154,11 +181,14 @@ def _run_cell(
         python_version=cell.python,
         agent_env=agent_env,
     )
+    _log(f"      deployed {deployed.agent_name}; invoking /chat…")
     try:
         _invoke_agent(deployed)
+        _log("      invoked; polling observer for spans…")
         spans = poll_traces(client, deployed, observer_base_url)
     finally:
         client.teardown_agent(deployed)
+    _log(f"      captured {len(spans)} span(s)")
 
     if not spans:
         return CellResult(
