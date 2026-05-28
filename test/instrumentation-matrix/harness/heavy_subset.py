@@ -15,10 +15,17 @@ or assert framework-specific span kinds — doing so would only be meaningful
 with a deployable agent per framework, which we don't have yet (see
 FINDINGS / RUNBOOK §7).
 
-The one axis that *does* change what gets deployed is the
-**instrumentation/Traceloop version** (it pins the init-container). So the
-subset is one cell per Traceloop version, on the default framework + python —
-i.e. the representative agent re-validated against each init-container version.
+Two axes *do* change what gets deployed, so the subset crosses both:
+
+1. **instrumentation/Traceloop version** — pins the init-container image.
+2. **python version** — the buildpack builds (and the instrumentation runs)
+   the agent on that interpreter, so a py-version-specific break surfaces
+   through the deployed pipeline.
+
+So the subset is one cell per (Traceloop version × python), on the default
+framework + framework_version — the representative agent re-validated against
+each init-container version and each python. (Unlike the framework axis,
+varying python deploys a genuinely different agent build.)
 """
 from __future__ import annotations
 
@@ -28,21 +35,20 @@ from harness.manifest import Cell, Manifest
 def select_heavy_subset(cells: list[Cell], manifest: Manifest) -> list[Cell]:
     default = manifest.default_cell
 
-    # One cell per Traceloop/provider version, pinned to the default framework
-    # + framework_version + python. Each maps to a distinct init-container
-    # (instrumentation) version — the only axis that changes the deployed
-    # agent. The framework is fixed to the default (which matches the deployed
-    # sample), so the cell's label reflects what actually runs.
-    per_version: list[Cell] = []
+    # One cell per (Traceloop/provider version × python), pinned to the default
+    # framework + framework_version. The framework is fixed to the default
+    # (which matches the deployed sample), so the cell's label reflects what
+    # actually runs; the provider version and python are the two axes that
+    # change the deployed agent (init-container image, buildpack interpreter).
+    out: list[Cell] = []
     seen: set[str] = set()
     for c in cells:
         if (
             c.provider_name == default.provider
             and c.framework_name == default.framework
             and c.framework_version == default.framework_version
-            and c.python == default.python
             and c.id not in seen
         ):
             seen.add(c.id)
-            per_version.append(c)
-    return per_version
+            out.append(c)
+    return out

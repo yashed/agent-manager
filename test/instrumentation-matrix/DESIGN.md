@@ -759,9 +759,11 @@ Heavy is a **pipeline test, not a per-framework test**: it deploys one
 representative agent (`samples/customer-support-agent`, a LangChain/LangGraph
 app) and verifies its spans survive the full deployed path. That path is
 framework-agnostic, so the subset (`harness/heavy_subset.py`) is **one cell
-per Traceloop/instrumentation version**, on the default framework + python —
-the only axis that changes the deployed init-container. With a single Traceloop
-version today that's one cell; it grows as versions are added.
+per (Traceloop/instrumentation version × python)**, on the default framework.
+Those are the two axes that change the deployed agent: the init-container
+image, and the buildpack python the agent is built and instrumented on. With a
+single Traceloop version and four pythons today that's four cells; it grows as
+Traceloop versions are added.
 
 There is deliberately **no per-framework axis**. Deploying the same agent
 under a `crewai` / `llama-index` label proves nothing about those frameworks,

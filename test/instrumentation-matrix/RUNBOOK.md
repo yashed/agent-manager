@@ -229,9 +229,11 @@ LangChain/LangGraph app) against a real AMP stack on k3d, invokes it, polls
 validate against the `traceloop/v1` contract.
 
 Because that path is framework-agnostic, one agent proves it — so the subset
-(`harness/heavy_subset.py`) is **one cell per Traceloop/instrumentation
-version** on the default framework + python (the only axis that changes the
-deployed init-container). There is deliberately **no per-framework axis**:
+(`harness/heavy_subset.py`) is **one cell per (Traceloop/instrumentation
+version × python)** on the default framework. Those are the two axes that
+change the deployed agent: the init-container image, and the buildpack python
+the agent is built and instrumented on. There is deliberately **no
+per-framework axis**:
 deploying the same LangGraph agent under a `crewai`/`llama-index` label proves
 nothing about those frameworks, and asserting their span kinds (e.g.
 `crewaitask`) against it can never pass. The driver therefore validates the

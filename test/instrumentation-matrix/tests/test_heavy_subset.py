@@ -80,12 +80,17 @@ def test_subset_deduplicates_overlapping_axes():
     assert len(ids) == len(set(ids))
 
 
-def test_subset_uses_default_python_only():
+def test_subset_covers_each_python_version():
     m = _multi_manifest()
     m.python_versions = ["3.10", "3.11", "3.12"]
     cells = expand_matrix(m)
     sub = select_heavy_subset(cells, m)
-    assert all(c.python == "3.11" for c in sub)
+    # Python is a heavy axis: each python appears (the agent is rebuilt on it).
+    assert {c.python for c in sub} == {"3.10", "3.11", "3.12"}
+    # Still default framework only — no per-framework axis.
+    assert all(c.framework_name == "langchain" for c in sub)
+    # 2 provider versions × 3 pythons.
+    assert len(sub) == 6
 
 
 def test_per_tl_axis_pins_default_framework_version():
