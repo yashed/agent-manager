@@ -56,16 +56,19 @@ def _multi_manifest() -> Manifest:
     )
 
 
-def test_subset_covers_each_traceloop_version_once_and_each_framework_once():
+def test_subset_covers_each_traceloop_version_on_the_default_framework():
     m = _multi_manifest()
     cells = expand_matrix(m)
     sub = select_heavy_subset(cells, m)
     versions = {(c.provider_version, c.framework_name) for c in sub}
-    # per-traceloop axis: each version paired with the default framework.
+    # One cell per Traceloop version, all on the default framework — that's the
+    # only axis that changes the deployed init-container.
     assert ("0.60.0", "langchain") in versions
     assert ("0.61.0", "langchain") in versions
-    # per-framework axis: each framework paired with the default traceloop.
-    assert ("0.60.0", "crewai") in versions
+    # Heavy deploys one representative agent, so there is NO per-framework
+    # axis: non-default frameworks (crewai) are not in the subset.
+    assert all(c.framework_name == "langchain" for c in sub)
+    assert ("0.60.0", "crewai") not in versions
 
 
 def test_subset_deduplicates_overlapping_axes():
@@ -77,12 +80,17 @@ def test_subset_deduplicates_overlapping_axes():
     assert len(ids) == len(set(ids))
 
 
-def test_subset_uses_default_python_only():
+def test_subset_covers_each_python_version():
     m = _multi_manifest()
     m.python_versions = ["3.10", "3.11", "3.12"]
     cells = expand_matrix(m)
     sub = select_heavy_subset(cells, m)
-    assert all(c.python == "3.11" for c in sub)
+    # Python is a heavy axis: each python appears (the agent is rebuilt on it).
+    assert {c.python for c in sub} == {"3.10", "3.11", "3.12"}
+    # Still default framework only — no per-framework axis.
+    assert all(c.framework_name == "langchain" for c in sub)
+    # 2 provider versions × 3 pythons.
+    assert len(sub) == 6
 
 
 def test_per_tl_axis_pins_default_framework_version():

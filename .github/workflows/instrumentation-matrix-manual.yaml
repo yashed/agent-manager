@@ -31,6 +31,14 @@ on:
         description: 'Re-record cassettes (requires OPENAI/ANTHROPIC keys) and open a refresh PR'
         type: boolean
         default: false
+      heavy_only:
+        description: 'Skip the emission matrix and run only the heavy tier (implies heavy)'
+        type: boolean
+        default: false
+      heavy_cell_id:
+        description: 'Run only this one heavy-subset cell id (cheap iteration); empty = full subset'
+        required: false
+        default: ''
 
 permissions:
   contents: read   # open-record-pr escalates to write at the job level
@@ -42,6 +50,8 @@ concurrency:
 jobs:
   resolve-cells:
     runs-on: ubuntu-latest
+    # Skipped for heavy-only iteration — no emission matrix to expand.
+    if: ${{ !inputs.heavy_only }}
     outputs:
       cell_ids: ${{ steps.expand.outputs.cell_ids }}
       count: ${{ steps.expand.outputs.count }}
@@ -155,10 +165,9 @@ jobs:
   heavy:
     runs-on: ubuntu-latest
     needs: run-cells
-    if: ${{ inputs.include_heavy_tier }}
-    # Deploy/poll bodies are implemented but the build-from-source bring-up
-    # is unvalidated in CI — keep continue-on-error until a real run is green.
-    continue-on-error: true
+    # Normal run: gate behind a green emission matrix. heavy_only: run
+    # regardless (run-cells is skipped), so always() is needed to evaluate at all.
+    if: ${{ always() && (inputs.heavy_only || (inputs.include_heavy_tier && needs.run-cells.result == 'success')) }}
     steps:
       - uses: actions/checkout@v4
       # Build AMP component images from this branch + stand up the stack on
@@ -169,7 +178,8 @@ jobs:
           python-version: '3.11'
       # requests: heavy/driver.py + amp_client/observer use it for the
       # AMP REST + observer calls (the emission tier never makes live calls).
-      - run: pip install nox pyyaml requests
+      # jsonschema: harness.validator validates spans against the contract.
+      - run: pip install nox pyyaml requests jsonschema
       - name: Run heavy tier
         working-directory: test/instrumentation-matrix
         # URLs + IDP creds default to the dev bring-up's values; only the LLM
@@ -177,7 +187,53 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The deployed customer-support-agent's web-search tool needs this.
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          # Optional single-cell run for cheap iteration; empty = full subset.
+          HEAVY_CELL_ID: ${{ inputs.heavy_cell_id }}
         run: nox -s heavy
+      - name: Dump cluster diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          echo "=== port-forward liveness (HTTP 000 = no connection / dropped forward) ==="
+          for p in 9000 8195 9243 22893 8090 9098 8200; do
+            code=$(curl -s -m3 -o /dev/null -w "%{http_code}" "http://localhost:$p" 2>/dev/null)
+            echo "  localhost:$p -> ${code:-000}"
+          done
+          echo "=== pods (all namespaces) ==="
+          kubectl get pods -A -o wide
+          echo "=== agent pod logs (incl. Running — the deploy may be healthy yet acked failed) ==="
+          kubectl get pods -A --no-headers 2>/dev/null \
+            | awk '/traceloop-/{print $1" "$2}' \
+            | while read -r ns pod; do
+                echo "----- $ns/$pod -----"
+                kubectl describe pod -n "$ns" "$pod" 2>/dev/null | sed -n '/Events:/,$p' | tail -25
+                kubectl logs -n "$ns" "$pod" --all-containers --tail=80 2>/dev/null
+              done
+          echo "=== OpenChoreo / gateway CRD kinds present ==="
+          mapfile -t KINDS < <(kubectl get crd -o name 2>/dev/null | grep -iE 'openchoreo|api-platform|wso2' | sed 's#.*/##')
+          printf '  %s\n' "${KINDS[@]}"
+          echo "=== agent CR instances + status (deploy/binding/release/component/workload) ==="
+          for k in "${KINDS[@]}"; do
+            while read -r ns name _; do
+              [ "$ns" = "NAMESPACE" ] && continue
+              case "$name" in
+                *traceloop-*)
+                  echo "--- $k $ns/$name ---"
+                  kubectl get "$k" "$name" -n "$ns" -o yaml 2>/dev/null | sed -n '/^status:/,$p' | head -50 ;;
+              esac
+            done < <(kubectl get "$k" -A 2>/dev/null)
+          done
+          echo "=== data-plane cluster-agent logs (sends deploy acks) ==="
+          kubectl logs -n openchoreo-data-plane deploy/cluster-agent-dataplane --tail=100 2>/dev/null
+          echo "=== gateway controller logs ==="
+          kubectl get pods -n openchoreo-data-plane --no-headers 2>/dev/null \
+            | awk '/gateway-controller/{print $1}' \
+            | while read -r p; do echo "----- $p -----"; kubectl logs -n openchoreo-data-plane "$p" --tail=80 2>/dev/null; done
+          echo "=== recent events ==="
+          kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -80
       - uses: actions/upload-artifact@v4
         if: always()
         with:

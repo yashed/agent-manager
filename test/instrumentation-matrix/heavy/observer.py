@@ -32,6 +32,11 @@ from heavy.amp_client import AmpClient, DeployedAgent
 
 _HTTP_TIMEOUT_S = 30
 _POLL_S = 10
+# Spans index incrementally: a chat turn's chain/embedding spans land before
+# the llm completion span. Don't return on the first non-empty fetch — wait
+# until the span count holds steady across this many consecutive polls so
+# late-arriving spans aren't missed.
+_SETTLE_POLLS = 2
 
 
 def _rfc3339(dt: datetime) -> str:
@@ -59,39 +64,56 @@ def poll_traces(
     session = requests.Session()
 
     deadline = time.monotonic() + timeout_s
-    trace_ids: list[str] = []
     got_clean_response = False
     last_error: str | None = None
-    while time.monotonic() < deadline:
+    best_spans: list[dict] = []
+    last_count = -1
+    stable_polls = 0
+    while True:
         trace_ids, err = _list_trace_ids(session, client, base, deployed, start_time, end_time)
         if err is None:
             got_clean_response = True
         else:
             last_error = err
-        if trace_ids:
+
+        spans: list[dict] = []
+        for trace_id in trace_ids:
+            for span_id in _list_span_ids(
+                session, client, base, deployed, trace_id, start_time, end_time
+            ):
+                detail = _get_span_detail(session, client, base, trace_id, span_id)
+                if detail is not None:
+                    spans.append(_to_validator_span(detail))
+
+        if spans:
+            best_spans = spans
+            # Settled once the count holds steady across consecutive polls —
+            # this lets the late llm span join the early chain/embedding ones.
+            if len(spans) == last_count:
+                stable_polls += 1
+                if stable_polls >= _SETTLE_POLLS:
+                    return spans
+            else:
+                stable_polls = 0
+            last_count = len(spans)
+
+        # Stop before a sleep would overrun the deadline.
+        if time.monotonic() + _POLL_S >= deadline:
             break
         time.sleep(_POLL_S)
-    if not trace_ids:
-        # Distinguish "observer answered 200 but no traces" (genuinely empty →
-        # the driver maps [] to no-spans-captured) from "every list call
-        # errored" (transport/HTTP problem → raise so the driver records a
-        # pipeline-error, not a misleading no-spans-captured).
-        if not got_clean_response:
-            raise RuntimeError(
-                f"trace listing never succeeded within {timeout_s}s "
-                f"(last error: {last_error})"
-            )
-        return []
 
-    spans: list[dict] = []
-    for trace_id in trace_ids:
-        for span_id in _list_span_ids(
-            session, client, base, deployed, trace_id, start_time, end_time
-        ):
-            detail = _get_span_detail(session, client, base, trace_id, span_id)
-            if detail is not None:
-                spans.append(_to_validator_span(detail))
-    return spans
+    if best_spans:
+        return best_spans
+    # Distinguish "observer answered 200 but no traces" (genuinely empty → the
+    # driver maps [] to no-spans-captured) from "every list call errored"
+    # (transport/HTTP problem → raise so the driver records a pipeline-error,
+    # not a misleading no-spans-captured).
+    if not got_clean_response:
+        raise RuntimeError(
+            f"trace listing never succeeded within {timeout_s}s "
+            f"(last error: {last_error})"
+        )
+    return []
 
 
 def _auth_get(session, client: AmpClient, url: str, params: dict | None = None):

@@ -221,11 +221,30 @@ Pair every `known-broken` entry with an `F-NNN` entry in `FINDINGS.md` so the
 
 ## 7. Heavy tier (deploy contract + ops)
 
-The heavy tier (`nox -s heavy`, `heavy/driver.py`) deploys a representative
-cell subset (`harness/heavy_subset.py`: one per Traceloop version + one per
-framework, on the default python) against a real AMP stack on k3d, invokes
-each agent, polls `traces-observer-service`, and validates the spans that
-survive the full pipeline against the same `traceloop/v1` contract.
+The heavy tier (`nox -s heavy`, `heavy/driver.py`) is a **pipeline test**: it
+deploys one representative agent (`samples/customer-support-agent`, a
+LangChain/LangGraph app) against a real AMP stack on k3d, invokes it, polls
+`traces-observer-service`, and checks that the spans survive the full path
+(auto-instrumentation → gateway → collector → OpenSearch → observer) and
+validate against the `traceloop/v1` contract.
+
+Because that path is framework-agnostic, one agent proves it — so the subset
+(`harness/heavy_subset.py`) is **one cell per (Traceloop/instrumentation
+version × python)** on the default framework. Those are the two axes that
+change the deployed agent: the init-container image, and the buildpack python
+the agent is built and instrumented on. There is deliberately **no
+per-framework axis**:
+deploying the same LangGraph agent under a `crewai`/`llama-index` label proves
+nothing about those frameworks, and asserting their span kinds (e.g.
+`crewaitask`) against it can never pass. The driver therefore validates the
+kinds the *deployed agent* emits (`heavy/driver.py:_DEPLOYED_AGENT_SPAN_KINDS`
+— the `llm` span, plus shape-validation of every captured span), **not** each
+cell's framework kinds. Per-framework span *shape* is the emission tier's job.
+
+True per-framework heavy coverage would need a deployable agent app per
+framework (the `cells/*_sample.py` are in-process scripts, not deployable
+buildpack apps). That's tracked as future work — e.g. adding a deployable
+`crewai` sample and deploying it for crewai cells (see FINDINGS).
 
 ### Bring-up: build-from-source
 

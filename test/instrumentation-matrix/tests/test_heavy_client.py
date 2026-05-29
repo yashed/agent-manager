@@ -10,8 +10,14 @@ import pytest
 
 responses = pytest.importorskip("responses")
 
-from heavy.amp_client import AmpClient, AmpError, IdpCredentials  # noqa: E402
+import re  # noqa: E402
+
+from heavy.amp_client import AmpClient, AmpError, IdpCredentials, _safe_name  # noqa: E402
 from heavy.observer import poll_traces  # noqa: E402
+
+# AMP resource-name rule (agent-manager-service utils.ValidateResourceName):
+# <=25 chars, [a-z0-9-], starts with a letter, ends alphanumeric.
+_AMP_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{0,23}[a-z0-9]$")
 
 BASE = "http://amp.test"
 OBS = "http://obs.test"
@@ -59,7 +65,8 @@ def _mock_happy_deploy(org="default", name="traceloop-0-60-0-langchain-0-3-27-py
     # build: appears, then completes with an imageId
     responses.add(responses.GET, f"{BASE}{a}/builds", json={"builds": [{"buildName": "b1"}]}, status=200)
     responses.add(responses.GET, f"{BASE}{a}/builds/b1", json={"buildName": "b1", "status": "Completed", "imageId": "img-9"}, status=200)
-    responses.add(responses.POST, f"{BASE}{a}/deployments", json={}, status=202)
+    # No POST /deployments: the agent auto-deploys on create; the driver only
+    # polls GET /deployments for the active endpoint.
     responses.add(
         responses.GET, f"{BASE}{a}/deployments",
         # endpoint is the agent's base URL; the driver appends /chat at invoke.
@@ -73,9 +80,10 @@ def _mock_happy_deploy(org="default", name="traceloop-0-60-0-langchain-0-3-27-py
 @responses.activate
 def test_deploy_agent_happy_path():
     _mock_token()
-    name = _mock_happy_deploy()
+    cell_id = "traceloop-0.60.0-langchain-0.3.27-py3.11"
+    name = _mock_happy_deploy(name=_safe_name(cell_id))
     d = _client().deploy_agent(
-        cell_id="traceloop-0.60.0-langchain-0.3.27-py3.11",
+        cell_id=cell_id,
         instrumentation_version="0.2.1",
         framework_package="langchain",
         framework_version="0.3.27",
@@ -169,3 +177,27 @@ def test_poll_traces_empty_when_no_traces():
     )
     responses.add(responses.GET, f"{OBS}/api/v1/traces", json={"traces": []}, status=200)
     assert poll_traces(_client(), d, OBS, timeout_s=1) == []
+
+
+# A representative heavy-subset cell id — its dotted versions make the naive
+# slug 47 chars, well over AMP's 25-char cap.
+_LONG_CELL = "traceloop-0.60.0-anthropic-direct-0.45.0-py3.11"
+
+
+def test_safe_name_obeys_amp_resource_rule():
+    name = _safe_name(_LONG_CELL)
+    assert len(name) <= 25
+    assert _AMP_NAME_RE.match(name), name
+
+
+def test_safe_name_short_id_passes_through():
+    assert _safe_name("traceloop-langchain") == "traceloop-langchain"
+
+
+def test_safe_name_is_stable_and_unique():
+    # deterministic: same input -> same name (teardown reuses it)
+    assert _safe_name(_LONG_CELL) == _safe_name(_LONG_CELL)
+    # distinct long cells that share a 25-char prefix must not collide
+    a = _safe_name("traceloop-0.60.0-anthropic-direct-0.45.0-py3.11")
+    b = _safe_name("traceloop-0.60.0-anthropic-direct-0.45.0-py3.12")
+    assert a != b
