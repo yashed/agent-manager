@@ -121,6 +121,37 @@ def test_deploy_agent_uses_framework_specific_sample_path():
     repo = body["provisioning"]["repository"]
     assert repo["appPath"] == "/samples/crewai-agent"
     assert body["build"]["buildpack"]["runCommand"] == "python main.py"
+    # Source ref defaults to wso2/agent-manager@main.
+    assert repo["url"] == "https://github.com/wso2/agent-manager"
+    assert repo["branch"] == "main"
+
+
+@responses.activate
+def test_deploy_agent_repo_ref_is_overridable():
+    """repo_url/repo_branch override the agent source the buildpack clones, so
+    a PR can validate a sample on its own branch before it merges to main."""
+    import json
+
+    _mock_token()
+    cell_id = "traceloop-0.60.0-langchain-0.3.27-py3.11"
+    _mock_happy_deploy(name=_safe_name(cell_id))
+    _client().deploy_agent(
+        cell_id=cell_id,
+        instrumentation_version="0.2.1",
+        framework_name="langchain",
+        framework_package="langchain",
+        framework_version="0.3.27",
+        python_version="3.11",
+        repo_url="https://github.com/acme/fork",
+        repo_branch="fix/my-branch",
+    )
+    agent_post = next(
+        c for c in responses.calls
+        if c.request.method == "POST" and c.request.url.rstrip("/").endswith("/agents")
+    )
+    repo = json.loads(agent_post.request.body)["provisioning"]["repository"]
+    assert repo["url"] == "https://github.com/acme/fork"
+    assert repo["branch"] == "fix/my-branch"
 
 
 @responses.activate

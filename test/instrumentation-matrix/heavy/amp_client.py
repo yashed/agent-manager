@@ -42,6 +42,14 @@ _DEPLOY_FAILED_STREAK = 3
 _HTTP_TIMEOUT_S = 30
 _TOKEN_REFRESH_SKEW_S = 30
 
+# The deployed agent's source is cloned from this repo ref by the in-cluster
+# buildpack. Defaults to wso2/agent-manager@main; overridable (see
+# heavy/driver.py AMP_AGENT_REPO_*) so a PR can validate a new/changed sample
+# on its own branch before it merges to main — the build pulls the agent code
+# from GitHub, not from the working tree the platform is built from.
+_DEFAULT_AGENT_REPO_URL = "https://github.com/wso2/agent-manager"
+_DEFAULT_AGENT_REPO_BRANCH = "main"
+
 # AMP caps resource names at 25 chars (utils.MaxResourceNameLength); when a
 # cell id exceeds it, _safe_name keeps a prefix plus this many hash chars.
 _MAX_NAME_LEN = 25
@@ -174,6 +182,8 @@ class AmpClient:
         framework_version: str,
         python_version: str,
         agent_env: dict[str, str] | None = None,
+        repo_url: str = _DEFAULT_AGENT_REPO_URL,
+        repo_branch: str = _DEFAULT_AGENT_REPO_BRANCH,
     ) -> DeployedAgent:
         """Create project + agent + build + deploy + API key; return the
         endpoint and key. Raises AmpError / TimeoutError on failure.
@@ -183,7 +193,10 @@ class AmpClient:
         `framework_name` selects which deployable sample to build (its
         `appPath`/`runCommand` come from harness.deployable_samples).
         `agent_env` (LLM keys) is injected as sensitive env on the agent so
-        the deployed pod can make real provider calls.
+        the deployed pod can make real provider calls. `repo_url`/`repo_branch`
+        are the GitHub source the buildpack clones the sample from (default
+        wso2/agent-manager@main); override to validate a sample on its own
+        branch before it merges.
         """
         name = _safe_name(cell_id)
         org = self.org
@@ -227,8 +240,8 @@ class AmpClient:
                 "provisioning": {
                     "type": "internal",
                     "repository": {
-                        "url": "https://github.com/wso2/agent-manager",
-                        "branch": "main",
+                        "url": repo_url,
+                        "branch": repo_branch,
                         "appPath": sample.app_path,
                     },
                 },
