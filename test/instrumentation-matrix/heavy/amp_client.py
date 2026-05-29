@@ -29,6 +29,8 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
+from harness.deployable_samples import DEPLOYABLE_SAMPLES
+
 # Timeout budget (see RUNBOOK.md §7).
 _BUILD_TIMEOUT_S = 600
 _BUILD_POLL_S = 10
@@ -167,6 +169,7 @@ class AmpClient:
         *,
         cell_id: str,
         instrumentation_version: str,
+        framework_name: str,
         framework_package: str,
         framework_version: str,
         python_version: str,
@@ -177,12 +180,21 @@ class AmpClient:
 
         `cell_id` is sanitised into the project/agent names. The cell's
         `instrumentation_version` pins the init-container image; the
-        framework pins ride in the build/runtime config of the sample.
+        `framework_name` selects which deployable sample to build (its
+        `appPath`/`runCommand` come from harness.deployable_samples).
         `agent_env` (LLM keys) is injected as sensitive env on the agent so
         the deployed pod can make real provider calls.
         """
         name = _safe_name(cell_id)
         org = self.org
+
+        try:
+            sample = DEPLOYABLE_SAMPLES[framework_name]
+        except KeyError:
+            raise AmpError(
+                f"no deployable sample for framework {framework_name!r}; "
+                f"deployable: {sorted(DEPLOYABLE_SAMPLES)}"
+            ) from None
 
         # LLM keys (sensitive) + the framework pin (informational).
         env = [
@@ -217,7 +229,7 @@ class AmpClient:
                     "repository": {
                         "url": "https://github.com/wso2/agent-manager",
                         "branch": "main",
-                        "appPath": "/samples/customer-support-agent",
+                        "appPath": sample.app_path,
                     },
                 },
                 "agentType": {"type": "agent-api", "subType": "chat-api"},
@@ -226,7 +238,7 @@ class AmpClient:
                     "buildpack": {
                         "language": "python",
                         "languageVersion": python_version,
-                        "runCommand": "python main.py",
+                        "runCommand": sample.run_command,
                     },
                 },
                 "configurations": {
