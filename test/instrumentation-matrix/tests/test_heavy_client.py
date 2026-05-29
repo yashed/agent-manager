@@ -85,6 +85,7 @@ def test_deploy_agent_happy_path():
     d = _client().deploy_agent(
         cell_id=cell_id,
         instrumentation_version="0.2.1",
+        framework_name="langchain",
         framework_package="langchain",
         framework_version="0.3.27",
         python_version="3.11",
@@ -93,6 +94,33 @@ def test_deploy_agent_happy_path():
     assert d.api_key == "key-xyz"
     assert d.image_id == "img-9"
     assert d.agent_name == name
+
+
+@responses.activate
+def test_deploy_agent_uses_framework_specific_sample_path():
+    """The agent-create payload's appPath comes from DEPLOYABLE_SAMPLES, so a
+    crewai cell builds samples/crewai-agent, not the langchain default."""
+    import json
+
+    _mock_token()
+    cell_id = "traceloop-0.60.0-crewai-1.1.0-py3.11"
+    _mock_happy_deploy(name=_safe_name(cell_id))
+    _client().deploy_agent(
+        cell_id=cell_id,
+        instrumentation_version="0.2.1",
+        framework_name="crewai",
+        framework_package="crewai",
+        framework_version="1.1.0",
+        python_version="3.11",
+    )
+    agent_post = next(
+        c for c in responses.calls
+        if c.request.method == "POST" and c.request.url.rstrip("/").endswith("/agents")
+    )
+    body = json.loads(agent_post.request.body)
+    repo = body["provisioning"]["repository"]
+    assert repo["appPath"] == "/samples/crewai-agent"
+    assert body["build"]["buildpack"]["runCommand"] == "python main.py"
 
 
 @responses.activate
@@ -107,6 +135,7 @@ def test_deploy_agent_raises_on_build_failure():
     with pytest.raises(AmpError, match="failed"):
         _client().deploy_agent(
             cell_id=name, instrumentation_version="0.2.1",
+            framework_name="langchain",
             framework_package="langchain", framework_version="0.3.27", python_version="3.11",
         )
 
@@ -118,6 +147,7 @@ def test_deploy_agent_surfaces_unexpected_status():
     with pytest.raises(AmpError, match="→ 409"):
         _client().deploy_agent(
             cell_id="x", instrumentation_version="0.2.1",
+            framework_name="langchain",
             framework_package="langchain", framework_version="0.3.27", python_version="3.11",
         )
 
