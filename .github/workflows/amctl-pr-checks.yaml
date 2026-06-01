@@ -48,12 +48,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: go mod verify
 
-      - name: Run golangci-lint
+      - name: Install staticcheck
         if: ${{ !cancelled() }}
-        uses: golangci/golangci-lint-action@v9
-        with:
-          working-directory: cli
-          args: --modules-download-mode=readonly
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck
+        if: ${{ !cancelled() }}
+        run: staticcheck ./...
 
       - name: Run go vet
         if: ${{ !cancelled() }}
