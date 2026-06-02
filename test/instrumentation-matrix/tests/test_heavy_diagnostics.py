@@ -83,3 +83,15 @@ def test_collect_evidence_never_raises_when_kubectl_unavailable(monkeypatch):
     monkeypatch.setattr(diagnostics, "_kubectl", lambda args: (127, ""))
     ev = diagnostics.collect_failure_evidence(_agent())
     assert ev.agent_init is None and ev.agent_export_status is None
+
+
+def test_systemic_categories_trigger_abort():
+    from heavy import driver
+    assert driver._is_systemic("ingest-rejected") is True
+    assert driver._is_systemic("collector-not-received") is True
+
+
+def test_per_cell_categories_do_not_abort():
+    from heavy import driver
+    for c in ("export-failed", "missing-span-kind", "pipeline-error", "no-spans-captured"):
+        assert driver._is_systemic(c) is False
