@@ -53,6 +53,9 @@ reused, so removed numbers just leave a gap.)
 - **Re-tighten when**: Traceloop's CrewAI instrumentation emits native types.
   Check by inspecting a fresh CrewAI cell's `capturedSpans` and grepping for
   any `[int]`/`[bool]` typed `crewai.*` value.
+- **2026-06-02 (traceloop 0.61.0)**: still stringified — `crewai.agent.max_iter
+  = '25'`, `crewai.task.delegations = '0'`, `crewai.task.async_execution =
+  'False'`, ids all `str`. Not fixed; concession stays.
 
 ## F-002 — Observer's `CrewAITaskData.Name` has no upstream source
 
@@ -105,6 +108,11 @@ reused, so removed numbers just leave a gap.)
   that wraps CrewAI tool execution as separate spans, OR OpenInference is
   added as a second instrumentation provider and its CrewAI cell asserts
   `tool` kind.
+- **2026-06-02 (F-009 now fixed; traceloop 0.60.0 + 0.61.0)**: re-ran with
+  event capture on. The CrewAI cell emits **zero span events** on both
+  versions, and no separate `tool` span — so this is a **confirmed real
+  upstream gap**, not a harness blind spot. Status upgraded from
+  open/unconfirmed to **open/confirmed**.
 
 ## F-004 — `crewai 1.14.x` × `traceloop-sdk 0.60` is unresolvable
 
@@ -121,6 +129,10 @@ reused, so removed numbers just leave a gap.)
 - **Re-tighten when**: Traceloop ships a 0.61+ release with looser
   `opentelemetry-api` requirements; or CrewAI relaxes its `opentelemetry-api`
   pin. At that point we can bump the matrix pin and re-record.
+- **2026-06-02 (traceloop 0.61.0)**: still unresolvable — `traceloop-sdk
+  0.61.0` requires `opentelemetry-api>=1.38,<2`, `crewai 1.14.5` requires
+  `>=1.34,<1.35`. The 0.61 release did **not** loosen the pin; crewai stays at
+  1.1.0.
 
 ## F-006 — Traceloop's LlamaIndex `OpenAIEmbedding` instrumentation omits vendor
 
@@ -134,6 +146,9 @@ reused, so removed numbers just leave a gap.)
   LLM kind still requires vendor.
 - **Re-tighten when**: Traceloop's LlamaIndex instrumentation emits
   `gen_ai.provider.name` on embedding spans.
+- **2026-06-02 (traceloop 0.61.0)**: embedding spans still carry no vendor
+  (neither `gen_ai.system` nor `gen_ai.provider.name`). Not fixed; concession
+  stays.
 
 ## F-008 — Traceloop's LangGraph 0.60 may not emit separate tool spans
 
@@ -153,6 +168,15 @@ reused, so removed numbers just leave a gap.)
   signal (then this is a real upstream gap), OR Traceloop adds tool-call
   wrapping for LangChain/LangGraph tools, OR OpenInference is added as a
   second provider.
+- **2026-06-02 (F-009 now fixed; traceloop 0.60.0 + 0.61.0)**: **contradicted.**
+  With the current sample/cassette, the LangGraph cell emits a *separate*
+  `execute_tool double` span (`traceloop.span.kind=tool`,
+  `gen_ai.operation.name=execute_tool`) on **both** 0.60.0 and 0.61.0 — the
+  classifier already counts it as `tool`. No events are involved. The original
+  "no tool span" observation no longer holds (likely the sample/cassette
+  exercises the tool now). **Recommend resolving F-008 by adding `tool` to
+  `frameworks[langgraph].spanKinds`** — note this is true independent of the
+  0.61.0 bump.
 
 ## F-009 — Harness doesn't capture span events
 
