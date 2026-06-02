@@ -129,10 +129,10 @@ The `category` tells you whose problem it likely is (design §12.1):
 **Example — a red row + its diff.** The summary shows:
 
 ```text
-| ❌ traceloop-0.61.0-crewai-1.1.0-py3.11 | fail | missing-span-kind: missing ['tool'] |
+| ❌ traceloop-0.61.0-langgraph-0.2.74-py3.11 | fail | missing-span-kind: missing ['tool'] |
 ```
 
-and `reports/diffs/traceloop-0.61.0-crewai-1.1.0-py3.11.diff.md` shows which
+and `reports/diffs/traceloop-0.61.0-langgraph-0.2.74-py3.11.diff.md` shows which
 required keys were present vs missing:
 
 ```
