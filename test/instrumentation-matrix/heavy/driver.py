@@ -249,10 +249,11 @@ def _run_cell(
             },
             violations=[],
             captured_spans=[],
-            evidence=evidence.raw or {
+            evidence={
                 "summary": f"agent_init={evidence.agent_init} "
                            f"export_status={evidence.agent_export_status} "
-                           f"collector_received={evidence.collector_received}"
+                           f"collector_received={evidence.collector_received}",
+                **(evidence.raw or {}),
             },
         )
 
