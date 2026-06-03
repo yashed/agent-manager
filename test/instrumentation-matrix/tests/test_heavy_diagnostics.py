@@ -79,6 +79,22 @@ def test_collect_evidence_detects_init_failure(monkeypatch):
     assert ev.agent_init == "failed"
 
 
+def test_collect_evidence_ignores_non_status_3digit(monkeypatch):
+    # A 3-digit number that is NOT an HTTP status (a span count here) must not
+    # be read as a status — otherwise a bogus 401/403 would mis-classify as
+    # ingest-rejected and abort every remaining cell.
+    def fake_kubectl(args):
+        if args[:3] == ["get", "pods", "-A"]:
+            return 0, "amp-dp traceloop-0-61-0-l-1476e2-abc123\n"
+        if args[0] == "logs":
+            return 0, "Failed to export 250 spans to the collector: timed out\n"
+        return 1, ""
+    monkeypatch.setattr(diagnostics, "_kubectl", fake_kubectl)
+    ev = diagnostics.collect_failure_evidence(_agent())
+    assert ev.agent_export_error is not None
+    assert ev.agent_export_status is None
+
+
 def test_collect_evidence_never_raises_when_kubectl_unavailable(monkeypatch):
     monkeypatch.setattr(diagnostics, "_kubectl", lambda args: (127, ""))
     ev = diagnostics.collect_failure_evidence(_agent())

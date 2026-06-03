@@ -86,7 +86,11 @@ def _agent_signals(agent_name: str, ev: Evidence) -> None:
     for line in log.splitlines():
         if "failed to export" in line.lower():
             ev.agent_export_error = line.strip()[:300]
-            m = re.search(r"\b(\d{3})\b", line)
+            # Only read a 3-digit number that appears in an HTTP-status context
+            # (the OTLP/HTTP exporter logs "... code: 401, reason: ...").
+            # A bare \d{3} would grab a span count/port and a bogus 401/403
+            # would mis-classify as ingest-rejected — which aborts every cell.
+            m = re.search(r"(?:code|status(?:\s*code)?|http)[:=\s]+(\d{3})\b", line, re.I)
             if m:
                 ev.agent_export_status = int(m.group(1))
             break
