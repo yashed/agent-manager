@@ -48,7 +48,7 @@ def reset_opensearch_indices() -> None:
         return
     proc = subprocess.run(
         ["kubectl", "-n", _NS, "exec", pod, "--",
-         "curl", "-s", "-X", "DELETE", "http://localhost:9200/spans-*"],
+         "curl", "-sf", "-X", "DELETE", "http://localhost:9200/spans-*"],
         capture_output=True, text=True,
     )
     if proc.returncode != 0 and not _warned:
