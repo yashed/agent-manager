@@ -205,10 +205,13 @@ jobs:
               [ -e "$f" ] || continue
               python - "$f" <<'PY'
           import json, sys
-          d = json.load(open(sys.argv[1]))
-          ev = d.get("evidence") or {}
-          summ = ev.get("summary") or (("agent: " + ev["agent"][:80]) if ev.get("agent") else "")
-          print(f"| {d['cellId']} | {d['result']} | {d.get('category') or ''} | {summ.replace('|', '/')} |")
+          try:
+              d = json.load(open(sys.argv[1]))
+              ev = d.get("evidence") or {}
+              summ = ev.get("summary") or (("agent: " + ev["agent"][:80]) if ev.get("agent") else "")
+              print(f"| {d['cellId']} | {d['result']} | {d.get('category') or ''} | {summ.replace('|', '/')} |")
+          except Exception as e:  # a malformed report must not blank the whole table
+              print(f"| {sys.argv[1]} | ERROR | | {str(e)[:80].replace('|', '/')} |")
           PY
             done
           } >> "$GITHUB_STEP_SUMMARY"
