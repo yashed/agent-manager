@@ -541,7 +541,7 @@ def main() -> None:
         # Message vs the expected 10-field schema). Response content is unaffected.
         warnings.filterwarnings("ignore", module="pydantic")
 
-        logger.info("Configured LiteLLM to route through OpenAI-compatible gateway at %s", llm_api_base)
+        logger.info("Configured LLM client to route through OpenAI-compatible gateway at %s", llm_api_base)
 
     logger.info(
         "Starting monitor evaluation monitor=%s organization=%s project=%s agent=%s env=%s time_range=%s..%s sampling=%.1f",
