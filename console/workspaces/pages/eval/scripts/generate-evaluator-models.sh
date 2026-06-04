@@ -322,7 +322,9 @@ for line in lines:
     if not line or line.startswith('#'):
         continue
     name = re.split(r'[><=!~;\s]', line)[0].strip()
-    if name:
+    # Packages that are installed but intentionally not advertised in the
+    # editor's package list.
+    if name and name.lower() not in {'litellm'}:
         names.append(name)
 
 # Include WSO2 library first

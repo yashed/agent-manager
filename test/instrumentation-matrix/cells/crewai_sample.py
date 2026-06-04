@@ -18,7 +18,7 @@ def run_scenario() -> str:
     # app.crewai.com (which would embed a one-time access code).
     os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
     os.environ.setdefault("CREWAI_DISABLE_TRACING_PROMPT", "true")
-    # Use LiteLLM's bundled model cost map instead of fetching from GitHub.
+    # Use bundled model cost map instead of fetching from GitHub.
     # Otherwise the cell makes an HTTP call to raw.githubusercontent.com on
     # cold start, which isn't in the cassette and breaks replay.
     os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
