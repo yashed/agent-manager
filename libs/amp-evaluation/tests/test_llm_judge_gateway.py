@@ -119,6 +119,22 @@ def test_without_gateway_config_no_api_base_or_client_args(mock_completion):
     assert "client_args" not in kwargs
 
 
+@patch("any_llm.completion")
+def test_bedrock_omits_response_format(mock_completion):
+    # any-llm's Bedrock provider rejects response_format; it must be omitted and
+    # the JSON-instruction prompt + Pydantic validation used instead.
+    mock_completion.return_value = _response()
+    _SimpleJudge(model="bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0").evaluate(_make_trace())
+    assert "response_format" not in mock_completion.call_args.kwargs
+
+
+@patch("any_llm.completion")
+def test_non_bedrock_includes_response_format(mock_completion):
+    mock_completion.return_value = _response()
+    _SimpleJudge(model="openai/gpt-4o-mini").evaluate(_make_trace())
+    assert mock_completion.call_args.kwargs["response_format"] is JudgeOutput
+
+
 # ---------------------------------------------------------------------------
 # Per-provider header injection. The api-key header must reach every provider's
 # client, but the constructor kwarg differs by SDK (verified against real

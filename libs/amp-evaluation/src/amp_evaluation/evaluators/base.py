@@ -708,6 +708,11 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
 
         gateway_kwargs = self._gateway_kwargs(self.model)
 
+        # Bedrock (via any-llm) rejects response_format; fall back to the prompt's
+        # JSON instructions + Pydantic validation + retries for that provider.
+        provider = self.model.replace(":", "/").split("/", 1)[0].lower()
+        use_response_format = provider != "bedrock"
+
         try:
             last_error = None
             for attempt in range(self.max_retries + 1):
@@ -720,15 +725,18 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
                         f"The 'score' MUST be a top-level numeric field in the JSON, NOT embedded in the explanation text.]"
                     )
 
+                completion_kwargs = {
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt + retry_ctx}],
+                    "temperature": self.temperature,
+                    "max_tokens": self.max_tokens,
+                    **gateway_kwargs,
+                }
+                if use_response_format:
+                    completion_kwargs["response_format"] = JudgeOutput
+
                 try:
-                    response = completion(
-                        model=self.model,
-                        messages=[{"role": "user", "content": prompt + retry_ctx}],
-                        temperature=self.temperature,
-                        max_tokens=self.max_tokens,
-                        response_format=JudgeOutput,
-                        **gateway_kwargs,
-                    )
+                    response = completion(**completion_kwargs)
                 except Exception as e:
                     last_error = str(e)
                     continue
