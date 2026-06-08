@@ -987,6 +987,18 @@ func (s *agentManagerService) createComponentAgent(ctx context.Context, orgName,
 		return fmt.Errorf("no environment found in deployment pipeline")
 	}
 
+	// Preflight: validate referenced LLM providers before creating any secrets or
+	// the component, so a bad provider fails fast with no resources to roll back.
+	if len(req.ModelConfig) > 0 {
+		handles := make([]string, 0, len(req.ModelConfig))
+		for _, mc := range req.ModelConfig {
+			handles = append(handles, mc.ProviderName)
+		}
+		if err := s.agentConfigurationService.ValidateProvidersInCatalog(ctx, orgName, handles); err != nil {
+			return err
+		}
+	}
+
 	secretLocation := secretmanagersvc.SecretLocation{
 		OrgName:         orgName,
 		ProjectName:     projectName,
