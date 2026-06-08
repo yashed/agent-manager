@@ -99,6 +99,8 @@ agentManagerService:
     dbOperationTimeout: 30
     healthCheckTimeout: 5
     corsAllowedOrigin: "*"
+    # Enable RBAC enforcement on all routes
+    rbacEnabled: "true"
     observerURL: "http://observer.openchoreo-observability-plane.svc.cluster.local:8080"
     traceObserverURL: "http://amp-traces-observer.openchoreo-observability-plane.svc.cluster.local:9098"
 
