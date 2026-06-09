@@ -85,6 +85,14 @@ export interface UpdateGroupRequest {
 
 // --- Roles ---
 
+export const PREDEFINED_ROLES = [
+  "admin",
+  "developer",
+  "ai-lead",
+  "platform-engineer",
+  "Administrator",
+] as const;
+
 export interface ThunderRole {
   id: string;
   ouId?: string;

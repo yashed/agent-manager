@@ -35,7 +35,11 @@ import {
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap, type ThunderRole } from "@agent-management-platform/types";
+import { absoluteRouteMap, PREDEFINED_ROLES, type ThunderRole } from "@agent-management-platform/types";
+
+const isPredefinedRole = (roleName: string): boolean => {
+  return (PREDEFINED_ROLES as readonly string[]).includes(roleName);
+};
 
 export const RolesPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -139,11 +143,13 @@ export const RolesPage: React.FC = () => {
                           <Edit size={16} />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Delete role">
-                        <IconButton size="small" onClick={() => handleDelete(role)}>
-                          <Trash size={16} />
-                        </IconButton>
-                      </Tooltip>
+                      {!isPredefinedRole(role.name) && (
+                        <Tooltip title="Delete role">
+                          <IconButton size="small" onClick={() => handleDelete(role)}>
+                            <Trash size={16} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Stack>
                   </ListingTable.Cell>
                 </ListingTable.Row>
