@@ -52,15 +52,10 @@ import {
 import { PageLayout } from "@agent-management-platform/views";
 import {
   absoluteRouteMap,
-  PREDEFINED_ROLES,
   type ThunderUser,
   type ThunderGroup,
   type ThunderPermission,
 } from "@agent-management-platform/types";
-
-const isPredefinedRole = (roleName: string): boolean => {
-  return (PREDEFINED_ROLES as readonly string[]).includes(roleName);
-};
 
 type ActiveTab = "permissions" | "users" | "groups";
 
@@ -102,7 +97,7 @@ export const RoleEditPage: React.FC = () => {
     orgName: orgId,
     roleId: roleId ?? "",
   });
-  const isPermissionsReadOnly = roleData?.name ? isPredefinedRole(roleData.name) : false;
+  const isPermissionsReadOnly = roleData?.isReadOnly ?? false;
   const { data: assignmentsData, isLoading: isLoadingAssignments } = useGetRoleAssignments({
     orgName: orgId,
     roleId: roleId ?? "",

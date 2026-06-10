@@ -355,6 +355,9 @@ func (c *identityController) GetUserRoles(w http.ResponseWriter, r *http.Request
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get user roles")
 		return
 	}
+	for i := range roles {
+		roles[i].IsReadOnly = constants.IsPredefinedRole(roles[i].Name)
+	}
 	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles})
 }
 
@@ -740,6 +743,9 @@ func (c *identityController) GetGroupRoles(w http.ResponseWriter, r *http.Reques
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get group roles")
 		return
 	}
+	for i := range roles {
+		roles[i].IsReadOnly = constants.IsPredefinedRole(roles[i].Name)
+	}
 	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles})
 }
 
@@ -774,6 +780,7 @@ func (c *identityController) ListRoles(w http.ResponseWriter, r *http.Request) {
 	filteredRoles := make([]thundersvc.ThunderRole, 0, len(roles))
 	for _, role := range roles {
 		if role.OuID == resolvedOrg.OUID && role.Name != "Administrator" {
+			role.IsReadOnly = constants.IsPredefinedRole(role.Name)
 			filteredRoles = append(filteredRoles, role)
 		}
 	}
@@ -807,6 +814,7 @@ func (c *identityController) GetRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role.IsReadOnly = constants.IsPredefinedRole(role.Name)
 	utils.WriteSuccessResponse(w, http.StatusOK, role)
 }
 
@@ -837,6 +845,7 @@ func (c *identityController) CreateRole(w http.ResponseWriter, r *http.Request) 
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create role")
 		return
 	}
+	role.IsReadOnly = constants.IsPredefinedRole(role.Name)
 	utils.WriteSuccessResponse(w, http.StatusCreated, role)
 }
 
@@ -886,6 +895,7 @@ func (c *identityController) UpdateRole(w http.ResponseWriter, r *http.Request) 
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update role")
 		return
 	}
+	updatedRole.IsReadOnly = constants.IsPredefinedRole(updatedRole.Name)
 	utils.WriteSuccessResponse(w, http.StatusOK, updatedRole)
 }
 
