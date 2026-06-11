@@ -701,13 +701,12 @@ func (c *TracingController) ExportTraces(ctx context.Context, params TraceQueryP
 				return
 			}
 
-			// Extract input/output
-			var input, output interface{}
-			if opensearch.IsCrewAISpan(rootSpan.Attributes) {
-				input, output = opensearch.ExtractCrewAIRootSpanInputOutput(rootSpan)
-			} else {
-				input, output = opensearch.ExtractRootSpanInputOutput(rootSpan)
-			}
+			// Extract input/output. Agent-rooted traces (e.g. a LangGraph
+			// invoke_agent wrapper) carry no traceloop.entity.output on the
+			// root, so fall back through the child chain span and leaf-LLM
+			// spans — otherwise the exported trace has a blank response and the
+			// LLM judge scores nothing. All spans are already in memory here.
+			input, output := opensearch.ExtractTraceInputOutputWithFallback(rootSpan, spans)
 
 			tokenUsage := opensearch.ExtractTokenUsage(spans)
 			traceStatus := opensearch.ExtractTraceStatus(spans)
