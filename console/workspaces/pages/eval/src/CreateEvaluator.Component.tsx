@@ -77,6 +77,7 @@ export const CreateEvaluatorComponent: React.FC = () => {
     >
       <SectionErrorBoundary fallbackMessage="The evaluator form failed to render. Click Retry to try again.">
         <EvaluatorForm
+          orgId={orgId!}
           onSubmit={handleSubmit}
           isSubmitting={isPending}
           serverError={error}

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Autocomplete,
@@ -51,6 +51,8 @@ import Editor, { type Monaco } from "@monaco-editor/react";
 import type {
   EvaluatorConfigParam,
   EvaluatorLevel,
+  LLMModel,
+  LLMModelProvider,
 } from "@agent-management-platform/types";
 import {
   DataModelReferenceDrawer,
@@ -68,6 +70,11 @@ import {
   SUPPORTED_PACKAGES,
   type CompletionSuggestion,
 } from "../generated/evaluator-models.generated";
+import {
+  useListLLMProviders,
+  useGetLLMProvider,
+  useGenerateLLMCompletion,
+} from "@agent-management-platform/api-client";
 
 // ---------------------------------------------------------------------------
 // AI copilot prompt helper
@@ -731,6 +738,7 @@ const emptyParam = (): EvaluatorConfigParam => ({
 });
 
 interface EvaluatorFormProps {
+  orgId: string;
   onSubmit: (values: EvaluatorFormValues) => void;
   isSubmitting: boolean;
   serverError?: unknown;
@@ -741,6 +749,7 @@ interface EvaluatorFormProps {
 }
 
 export function EvaluatorForm({
+  orgId,
   onSubmit,
   isSubmitting,
   serverError,
@@ -760,6 +769,35 @@ export function EvaluatorForm({
     useState<ReferenceTypeKey | null>(null);
   const [showAiPrompt, setShowAiPrompt] = useState(false);
   const [aiPromptCopied, setAiPromptCopied] = useState(false);
+
+  // --- In-platform AI generation state ---
+  const [selectedProviderId, setSelectedProviderId] = useState("");
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const [aiUserPrompt, setAiUserPrompt] = useState("");
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [writingGuideContent, setWritingGuideContent] = useState<string | null>(null);
+
+  const { data: llmProvidersData } = useListLLMProviders({ orgName: orgId });
+  const availableLLMProviders = llmProvidersData?.providers ?? [];
+  const hasLLMProviders = availableLLMProviders.length > 0;
+
+  const { mutate: generateCompletion, isPending: isGenerating } =
+    useGenerateLLMCompletion();
+
+  const { data: selectedProviderData } = useGetLLMProvider({
+    orgName: orgId,
+    providerId: selectedProviderId,
+  });
+
+  const availableModels = useMemo((): LLMModel[] => {
+    if (!selectedProviderData) return [];
+    return (
+      selectedProviderData.modelProviders?.flatMap(
+        (mp: LLMModelProvider) => mp.models ?? [],
+      ) ?? []
+    );
+  }, [selectedProviderData]);
+
   const providersRegistered = useRef(false);
   const providerDisposablesRef = useRef<{ dispose(): void }[]>([]);
   const validationCleanupRef = useRef<(() => void) | null>(null);
@@ -786,6 +824,15 @@ export function EvaluatorForm({
       providersRegistered.current = false;
     };
   }, []);
+
+  // Fetch the writing guide once when the AI panel is first opened.
+  useEffect(() => {
+    if (!showAiPrompt || writingGuideContent !== null) return;
+    fetch("/prompts/writing-evaluators.md")
+      .then((r) => r.text())
+      .then(setWritingGuideContent)
+      .catch(() => setWritingGuideContent(""));
+  }, [showAiPrompt, writingGuideContent]);
 
   // Sync form values when initialValues prop changes (e.g. after async fetch)
   useEffect(() => {
@@ -1309,90 +1356,256 @@ export function EvaluatorForm({
                   bgcolor: "action.hover",
                 }}
               >
-                <Stack spacing={1.5}>
-                  <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                  >
-                    <Typography variant="subtitle2">
-                      AI Copilot Prompt
-                    </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setShowAiPrompt(false);
-                        setAiPromptCopied(false);
-                      }}
+                {hasLLMProviders ? (
+                  /* ── In-platform generation panel ── */
+                  <Stack spacing={1.5}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
                     >
-                      <CloseIcon size={16} />
-                    </IconButton>
-                  </Stack>
-                  <Typography variant="body2" color="text.secondary">
-                    Copy this prompt and paste it into your AI assistant.
-                    Describe what you want to evaluate, and the AI will generate
-                    the {values.type === "code" ? "code" : "prompt"} for you.
-                  </Typography>
-                  <TextField
-                    multiline
-                    rows={8}
-                    fullWidth
-                    value={resolveAiPrompt(
-                      values.type,
-                      values.level,
-                      values.displayName,
-                      values.description,
-                    )}
-                    InputProps={{
-                      readOnly: true,
-                      sx: { fontFamily: "monospace", fontSize: "0.8rem" },
-                      endAdornment: (
-                        <InputAdornment
-                          position="end"
-                          sx={{ alignSelf: "flex-start", mt: 1, mr: -0.5 }}
+                      <Typography variant="subtitle2">
+                        Generate with AI
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setShowAiPrompt(false);
+                          setGenerateError(null);
+                        }}
+                      >
+                        <CloseIcon size={16} />
+                      </IconButton>
+                    </Stack>
+
+                    <Stack direction="row" spacing={1.5}>
+                      <TextField
+                        select
+                        label="LLM Provider"
+                        size="small"
+                        value={selectedProviderId}
+                        onChange={(e) => {
+                          setSelectedProviderId(e.target.value);
+                          setSelectedModelId("");
+                        }}
+                        sx={{ flex: 1 }}
+                      >
+                        {availableLLMProviders.map((p) => (
+                          <MenuItem key={p.id} value={p.id}>
+                            {p.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+
+                      {availableModels.length > 0 ? (
+                        <TextField
+                          select
+                          label="Model"
+                          size="small"
+                          value={selectedModelId}
+                          onChange={(e) => setSelectedModelId(e.target.value)}
+                          sx={{ flex: 1 }}
                         >
-                          <Tooltip
-                            title={
-                              aiPromptCopied ? "Copied!" : "Copy to clipboard"
-                            }
-                            placement="top"
+                          {availableModels.map((m: LLMModel) => (
+                            <MenuItem key={m.id} value={m.id}>
+                              {m.name || m.id}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      ) : selectedProviderId ? (
+                        <TextField
+                          label="Model"
+                          size="small"
+                          placeholder="e.g. gpt-4o"
+                          value={selectedModelId}
+                          onChange={(e) => setSelectedModelId(e.target.value)}
+                          sx={{ flex: 1 }}
+                        />
+                      ) : null}
+                    </Stack>
+
+                    <TextField
+                      multiline
+                      rows={6}
+                      fullWidth
+                      label="Prompt sent to AI"
+                      value={
+                        aiUserPrompt ||
+                        resolveAiPrompt(
+                          values.type,
+                          values.level,
+                          values.displayName,
+                          values.description,
+                        )
+                      }
+                      onChange={(e) => setAiUserPrompt(e.target.value)}
+                      InputProps={{
+                        sx: { fontFamily: "monospace", fontSize: "0.8rem" },
+                      }}
+                    />
+
+                    {generateError && (
+                      <Alert severity="error" sx={{ py: 0.5 }}>
+                        {generateError}
+                      </Alert>
+                    )}
+
+                    <Box>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<SparklesIcon size={14} />}
+                        disabled={
+                          !selectedProviderId ||
+                          isGenerating ||
+                          (availableModels.length === 0 && !selectedModelId)
+                        }
+                        onClick={() => {
+                          setGenerateError(null);
+                          const prompt =
+                            aiUserPrompt ||
+                            resolveAiPrompt(
+                              values.type,
+                              values.level,
+                              values.displayName,
+                              values.description,
+                            );
+                          const messages: Array<{
+                            role: "system" | "user";
+                            content: string;
+                          }> = [];
+                          if (writingGuideContent) {
+                            messages.push({
+                              role: "system",
+                              content:
+                                "You are an expert at writing AMP evaluators. " +
+                                "Use the following framework reference to generate the evaluator:\n\n" +
+                                writingGuideContent,
+                            });
+                          }
+                          messages.push({ role: "user", content: prompt });
+                          generateCompletion(
+                            {
+                              orgName: orgId,
+                              providerId: selectedProviderId,
+                              body: {
+                                model: selectedModelId || undefined,
+                                messages,
+                              },
+                            },
+                            {
+                              onSuccess: (result: { content: string }) => {
+                                const match = result.content.match(/```(?:\w+)?\n([\s\S]*?)```/);
+                                editorRef.current?.setValue(match ? match[1].trimEnd() : result.content.trim());
+                                setShowAiPrompt(false);
+                                setGenerateError(null);
+                              },
+                              onError: (err: unknown) => {
+                                const msg =
+                                  err &&
+                                  typeof err === "object" &&
+                                  "message" in err
+                                    ? String((err as { message: unknown }).message)
+                                    : "Generation failed. Check the provider configuration.";
+                                setGenerateError(msg);
+                              },
+                            },
+                          );
+                        }}
+                        sx={{ textTransform: "none" }}
+                      >
+                        {isGenerating ? "Generating…" : "Generate"}
+                      </Button>
+                    </Box>
+                  </Stack>
+                ) : (
+                  /* ── Copy-to-clipboard fallback (no providers) ── */
+                  <Stack spacing={1.5}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
+                      <Typography variant="subtitle2">
+                        AI Copilot Prompt
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setShowAiPrompt(false);
+                          setAiPromptCopied(false);
+                        }}
+                      >
+                        <CloseIcon size={16} />
+                      </IconButton>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">
+                      Copy this prompt and paste it into your AI assistant.
+                      Describe what you want to evaluate, and the AI will
+                      generate the{" "}
+                      {values.type === "code" ? "code" : "prompt"} for you.
+                    </Typography>
+                    <TextField
+                      multiline
+                      rows={8}
+                      fullWidth
+                      value={resolveAiPrompt(
+                        values.type,
+                        values.level,
+                        values.displayName,
+                        values.description,
+                      )}
+                      InputProps={{
+                        readOnly: true,
+                        sx: { fontFamily: "monospace", fontSize: "0.8rem" },
+                        endAdornment: (
+                          <InputAdornment
+                            position="end"
+                            sx={{ alignSelf: "flex-start", mt: 1, mr: -0.5 }}
                           >
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                navigator.clipboard
-                                  .writeText(
-                                    resolveAiPrompt(
-                                      values.type,
-                                      values.level,
-                                      values.displayName,
-                                      values.description,
-                                    ),
-                                  )
-                                  .then(() => {
-                                    setAiPromptCopied(true);
-                                    setTimeout(
-                                      () => setAiPromptCopied(false),
-                                      2000,
-                                    );
-                                  })
-                                  .catch(() => {
-                                    /* clipboard unavailable */
-                                  });
-                              }}
+                            <Tooltip
+                              title={
+                                aiPromptCopied ? "Copied!" : "Copy to clipboard"
+                              }
+                              placement="top"
                             >
-                              {aiPromptCopied ? (
-                                <Check size={14} />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </IconButton>
-                          </Tooltip>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Stack>
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  navigator.clipboard
+                                    .writeText(
+                                      resolveAiPrompt(
+                                        values.type,
+                                        values.level,
+                                        values.displayName,
+                                        values.description,
+                                      ),
+                                    )
+                                    .then(() => {
+                                      setAiPromptCopied(true);
+                                      setTimeout(
+                                        () => setAiPromptCopied(false),
+                                        2000,
+                                      );
+                                    })
+                                    .catch(() => {
+                                      /* clipboard unavailable */
+                                    });
+                                }}
+                              >
+                                {aiPromptCopied ? (
+                                  <Check size={14} />
+                                ) : (
+                                  <Copy size={14} />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Stack>
+                )}
               </Box>
             </Collapse>
 

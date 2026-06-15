@@ -17,11 +17,15 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
@@ -56,6 +60,9 @@ type LLMController interface {
 	GetLLMProxy(w http.ResponseWriter, r *http.Request)
 	UpdateLLMProxy(w http.ResponseWriter, r *http.Request)
 	DeleteLLMProxy(w http.ResponseWriter, r *http.Request)
+
+	// Completion handler
+	GenerateCompletion(w http.ResponseWriter, r *http.Request)
 }
 
 type llmController struct {
@@ -65,6 +72,7 @@ type llmController struct {
 	deploymentService *services.LLMProviderDeploymentService
 	artifactRepo      repositories.ArtifactRepository
 	ocClient          client.OpenChoreoClient
+	encryptionKey     []byte
 }
 
 // NewLLMController creates a new LLM controller
@@ -75,6 +83,7 @@ func NewLLMController(
 	deploymentService *services.LLMProviderDeploymentService,
 	artifactRepo repositories.ArtifactRepository,
 	ocClient client.OpenChoreoClient,
+	encryptionKey []byte,
 ) LLMController {
 	return &llmController{
 		templateService:   templateService,
@@ -83,6 +92,7 @@ func NewLLMController(
 		deploymentService: deploymentService,
 		artifactRepo:      artifactRepo,
 		ocClient:          ocClient,
+		encryptionKey:     encryptionKey,
 	}
 }
 
@@ -1049,4 +1059,164 @@ func (c *llmController) UpdateLLMProviderCatalogStatus(w http.ResponseWriter, r 
 	// Convert to response
 	response := utils.ConvertModelToSpecLLMProviderResponse(provider)
 	utils.WriteSuccessResponse(w, http.StatusOK, response)
+}
+
+// GenerateCompletion proxies a chat-completion request through the provider's upstream endpoint.
+// POST /orgs/{orgName}/llm-providers/{providerId}/completions
+func (c *llmController) GenerateCompletion(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+	orgName := r.PathValue(utils.PathParamOrgName)
+	providerID := r.PathValue(utils.PathParamProviderId)
+
+	log.Info("GenerateCompletion: starting", "orgName", orgName, "providerID", providerID)
+
+	var req spec.LLMCompletionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(req.Messages) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "messages must not be empty")
+		return
+	}
+
+	provider, err := c.providerService.Get(providerID, orgName)
+	if err != nil {
+		switch {
+		case errors.Is(err, utils.ErrLLMProviderNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "LLM provider not found")
+		default:
+			log.Error("GenerateCompletion: failed to get provider", "error", err)
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get LLM provider")
+		}
+		return
+	}
+
+	upstream := provider.Configuration.Upstream
+	if upstream == nil || upstream.Main == nil || upstream.Main.URL == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Provider has no upstream URL configured")
+		return
+	}
+
+	// Resolve the API key from the encrypted SecretRef stored in the DB.
+	apiKey, err := c.resolveUpstreamAPIKey(upstream.Main.Auth)
+	if err != nil {
+		log.Error("GenerateCompletion: failed to resolve API key", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to resolve provider credentials")
+		return
+	}
+
+	// Build an OpenAI-compatible chat/completions endpoint URL.
+	// Some provider templates already include /v1 (e.g. https://api.openai.com/v1),
+	// so only add the version prefix when it is absent.
+	baseURL := strings.TrimRight(upstream.Main.URL, "/")
+	var completionsURL string
+	switch {
+	case strings.HasSuffix(baseURL, "/v1") || strings.HasSuffix(baseURL, "/v1beta"):
+		completionsURL = baseURL + "/chat/completions"
+	default:
+		completionsURL = baseURL + "/v1/chat/completions"
+	}
+
+	model := req.Model
+	if model == "" {
+		// Fall back to the first available model in the provider's catalog.
+		if len(provider.ModelProviders) > 0 && len(provider.ModelProviders[0].Models) > 0 {
+			model = provider.ModelProviders[0].Models[0].ID
+		}
+	}
+
+	payload := map[string]interface{}{
+		"model":    model,
+		"messages": req.Messages,
+	}
+	body, _ := json.Marshal(payload)
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, completionsURL, bytes.NewReader(body))
+	if err != nil {
+		log.Error("GenerateCompletion: failed to build request", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to build upstream request")
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Set auth header using the provider's configured header name.
+	// For standard Authorization headers add the Bearer prefix; for custom headers
+	// (e.g. x-goog-api-key, api-key) send the raw key value.
+	if apiKey != "" {
+		authHeader := "Authorization"
+		if upstream.Main.Auth != nil && upstream.Main.Auth.Header != nil && *upstream.Main.Auth.Header != "" {
+			authHeader = *upstream.Main.Auth.Header
+		}
+		if strings.EqualFold(authHeader, "authorization") {
+			if strings.HasPrefix(strings.ToLower(apiKey), "bearer ") {
+				httpReq.Header.Set(authHeader, apiKey)
+			} else {
+				httpReq.Header.Set(authHeader, "Bearer "+apiKey)
+			}
+		} else {
+			httpReq.Header.Set(authHeader, apiKey)
+		}
+	}
+
+	resp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		log.Error("GenerateCompletion: upstream call failed", "url", completionsURL, "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadGateway, "Upstream LLM call failed")
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to read upstream response")
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Warn("GenerateCompletion: upstream returned non-200", "status", resp.StatusCode, "body", string(respBody))
+		utils.WriteErrorResponse(w, http.StatusBadGateway, fmt.Sprintf("Upstream returned %d", resp.StatusCode))
+		return
+	}
+
+	// Extract the assistant's text from the OpenAI-compatible response.
+	var chatResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(respBody, &chatResp); err != nil || len(chatResp.Choices) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadGateway, "Unexpected upstream response format")
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, spec.LLMCompletionResponse{
+		Content: chatResp.Choices[0].Message.Content,
+	})
+}
+
+// resolveUpstreamAPIKey decrypts the AES-256-GCM encrypted key stored in Auth.SecretRef,
+// or returns Auth.Value directly if SecretRef is not set.
+func (c *llmController) resolveUpstreamAPIKey(auth *models.UpstreamAuth) (string, error) {
+	if auth == nil {
+		return "", nil
+	}
+	if auth.Value != nil {
+		return *auth.Value, nil
+	}
+	if auth.SecretRef == nil {
+		return "", nil
+	}
+	ciphertext, err := base64.StdEncoding.DecodeString(*auth.SecretRef)
+	if err != nil {
+		return "", fmt.Errorf("base64-decode secretRef: %w", err)
+	}
+	plaintext, err := utils.DecryptBytes(ciphertext, c.encryptionKey)
+	if err != nil {
+		return "", fmt.Errorf("decrypt secretRef: %w", err)
+	}
+	return string(plaintext), nil
 }

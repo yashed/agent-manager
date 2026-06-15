@@ -73,6 +73,9 @@ import type {
   UpdateLLMProxyRequest,
 } from "@agent-management-platform/types";
 import {
+  generateLLMCompletion,
+  type LLMCompletionRequest,
+  type LLMCompletionResponse,
   createLLMDeployment,
   createLLMProvider,
   createLLMProviderAPIKey,
@@ -515,5 +518,18 @@ export function useRevokeLLMProxyAPIKey() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["llm-proxy"] });
     },
+  });
+}
+
+export function useGenerateLLMCompletion() {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<
+    LLMCompletionResponse,
+    unknown,
+    { orgName: string; providerId: string; body: LLMCompletionRequest }
+  >({
+    action: { verb: 'generate', target: 'evaluator prompt' },
+    mutationFn: ({ orgName, providerId, body }) =>
+      generateLLMCompletion(orgName, providerId, body, getToken),
   });
 }

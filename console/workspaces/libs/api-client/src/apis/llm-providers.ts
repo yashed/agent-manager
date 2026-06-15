@@ -645,3 +645,36 @@ export async function revokeLLMProxyAPIKey(
   );
   if (!res.ok) throw await res.json();
 }
+
+export interface LLMCompletionMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+export interface LLMCompletionRequest {
+  model?: string;
+  messages: LLMCompletionMessage[];
+}
+
+export interface LLMCompletionResponse {
+  content: string;
+}
+
+export async function generateLLMCompletion(
+  orgName: string,
+  providerId: string,
+  body: LLMCompletionRequest,
+  getToken?: () => Promise<string>,
+): Promise<LLMCompletionResponse> {
+  const org = encodeRequired(orgName, "orgName");
+  const id = encodeRequired(providerId, "providerId");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpPOST(
+    `${SERVICE_BASE}/orgs/${org}/llm-providers/${id}/completions`,
+    body,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
