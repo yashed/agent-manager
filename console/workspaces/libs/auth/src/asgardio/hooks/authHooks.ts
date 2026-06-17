@@ -57,6 +57,7 @@ export const useAuthHooks = (): AuthHooks => {
   const {
     signIn,
     getAccessToken,
+    getStorageManager,
     signInSilently,
     signOut,
     isSignedIn = false,
@@ -79,14 +80,32 @@ export const useAuthHooks = (): AuthHooks => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // ThunderID v0.44 auth code flow access tokens may not include `scope` in the JWT payload.
+  // The Asgardeo SDK always stores the granted scope from the token response body in session data.
+  // Use session scope as the authoritative source; JWT payload scope is a secondary fallback.
+  const { data: sessionScope } = useQuery({
+    queryKey: ["sessionScope"],
+    queryFn: async (): Promise<string | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const storageManager: any = await getStorageManager?.();
+      if (!storageManager) return null;
+      const sessionData = await storageManager.getSessionData();
+      return (sessionData?.scope as string | undefined) ?? null;
+    },
+    enabled: !!isSignedIn && !!getStorageManager,
+    staleTime: 5 * 60 * 1000,
+  });
+
   const userInfo = useMemo(() => {
+    const jwtScope = tokenInfo?.payload?.scope as string | undefined;
     return {
       ...flattenedProfile,
       familyName: flattenedProfile?.family_name,
       givenName: flattenedProfile?.given_name,
       ...tokenInfo?.payload,
+      scope: sessionScope ?? jwtScope ?? undefined,
     } as UserInfo;
-  }, [flattenedProfile, tokenInfo]);
+  }, [flattenedProfile, tokenInfo, sessionScope]);
 
   const customLogin = () => {
     void signIn?.();

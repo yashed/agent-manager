@@ -99,7 +99,7 @@ export function useNavigationItems(): Array<
         identityGroups: false,
       };
     }
-    const s = new Set(scopeStr.split(" ").filter(Boolean));
+    const s = new Set(scopeStr.split(" ").filter(Boolean).map(sc => sc.startsWith("amp:") ? sc.slice(4) : sc));
     return {
       resources:      s.has("llm-provider:read") || s.has("llm-provider-template:read"),
       evaluation:     s.has("evaluator:read"),

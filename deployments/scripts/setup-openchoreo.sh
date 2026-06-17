@@ -42,6 +42,32 @@ install_control_plane() {
     echo "⏳ Waiting for Control Plane deployments to be ready (timeout: 5 minutes)..."
     kubectl wait -n openchoreo-control-plane --for=condition=available --timeout=300s deployment --all
     echo "✅ OpenChoreo Control Plane ready"
+
+    # ThunderID v0.44 changed the `sub` claim in client_credentials tokens from the client name
+    # to the org unit UUID. OpenChoreo v1.0.1 still defaults to claim: sub for service account
+    # identification, but its chart schema does not expose this config via Helm values.
+    # Patch the configmap directly to use claim: client_id, which still carries the stable
+    # client name (e.g. "amp-api-client") in v0.44 tokens.
+    echo "🔧 Patching openchoreo-api-config: service_account subject claim sub → client_id..."
+    CURRENT_CONFIG=$(kubectl get configmap openchoreo-api-config -n openchoreo-control-plane -o jsonpath='{.data.config\.yaml}')
+    PATCHED_CONFIG=$(python3 -c "
+import json, sys
+config = sys.stdin.read()
+lines = config.split('\n')
+result = []
+for line in lines:
+    if line.strip() == 'claim: sub':
+        result.append(line.replace('claim: sub', 'claim: client_id'))
+    else:
+        result.append(line)
+print(json.dumps('\n'.join(result)))
+" <<< "$CURRENT_CONFIG")
+    kubectl patch configmap openchoreo-api-config -n openchoreo-control-plane \
+        --type=merge \
+        --patch "{\"data\":{\"config.yaml\":$PATCHED_CONFIG}}"
+    kubectl rollout restart deployment/openchoreo-api -n openchoreo-control-plane
+    kubectl rollout status deployment/openchoreo-api -n openchoreo-control-plane --timeout=60s
+    echo "✅ openchoreo-api-config patched for ThunderID v0.44 compatibility"
 }
 
 # Function to install Data Plane

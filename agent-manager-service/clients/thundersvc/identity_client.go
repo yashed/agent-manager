@@ -871,68 +871,134 @@ func (c *thunderClient) InviteUser(ctx context.Context, email string, ouID strin
 		return "", err
 	}
 
+	// flowResp captures the fields common to every /flow/execute response.
+	// Thunder v0.35+ requires challengeToken from each step to be forwarded
+	// to the next step as a replay-prevention mechanism.
+	type flowResp struct {
+		ExecutionID    string `json:"executionId"`
+		ChallengeToken string `json:"challengeToken"`
+	}
+
+	decodeFlow := func(body []byte, step string) (flowResp, error) {
+		var r flowResp
+		if err := json.Unmarshal(body, &r); err != nil {
+			return r, fmt.Errorf("thunder invite user %s decode: %w", step, err)
+		}
+		return r, nil
+	}
+
 	// Step 1: start the onboarding flow.
 	body1, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
 		map[string]any{"flowType": "USER_ONBOARDING", "verbose": true})
 	if err != nil {
 		return "", fmt.Errorf("thunder invite user start flow: %w", err)
 	}
-	var startResp struct {
-		ExecutionID string `json:"executionId"`
+	resp1, err := decodeFlow(body1, "start flow")
+	if err != nil {
+		return "", err
 	}
-	if err := json.Unmarshal(body1, &startResp); err != nil {
-		return "", fmt.Errorf("thunder invite user start flow decode: %w", err)
-	}
-	execID := startResp.ExecutionID
+	execID := resp1.ExecutionID
+	challengeToken := resp1.ChallengeToken
 
 	// Step 2: select user type.
-	_, err = c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
+	body2, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
 		map[string]any{
-			"executionId": execID,
-			"inputs":      map[string]string{"userType": "engineer"},
-			"verbose":     true,
-			"action":      "action_usertype",
+			"executionId":    execID,
+			"challengeToken": challengeToken,
+			"inputs":         map[string]string{"userType": "engineer"},
+			"verbose":        true,
+			"action":         "action_usertype",
 		})
 	if err != nil {
 		return "", fmt.Errorf("thunder invite user submit type: %w", err)
 	}
+	resp2, err := decodeFlow(body2, "submit type")
+	if err != nil {
+		return "", err
+	}
+	challengeToken = resp2.ChallengeToken
 
-	// Step 3: select the target OU — only for cloud deployments with child OUs.
+	// Step 3: choose the invite path (added in Thunder v0.35 — the flow now
+	// branches between creating a user immediately vs sending an invite link).
+	body3, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
+		map[string]any{
+			"executionId":    execID,
+			"challengeToken": challengeToken,
+			"inputs":         map[string]any{},
+			"verbose":        true,
+			"action":         "action_invite_user",
+		})
+	if err != nil {
+		return "", fmt.Errorf("thunder invite user choose invite path: %w", err)
+	}
+	resp3, err := decodeFlow(body3, "choose invite path")
+	if err != nil {
+		return "", err
+	}
+	challengeToken = resp3.ChallengeToken
+
+	// Step 4: select the target OU — only for cloud deployments with child OUs.
 	// On-prem Thunder flows go directly from user type to email with no OU selection.
 	if ouID != "" {
-		_, err = c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
+		body4ou, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
 			map[string]any{
-				"executionId": execID,
-				"inputs":      map[string]string{"ouId": ouID},
-				"verbose":     true,
-				"action":      "action_ou_selection",
+				"executionId":    execID,
+				"challengeToken": challengeToken,
+				"inputs":         map[string]string{"ouId": ouID},
+				"verbose":        true,
+				"action":         "action_ou_selection",
 			})
 		if err != nil {
 			return "", fmt.Errorf("thunder invite user submit ou: %w", err)
 		}
+		resp4ou, err := decodeFlow(body4ou, "submit ou")
+		if err != nil {
+			return "", err
+		}
+		challengeToken = resp4ou.ChallengeToken
 	}
 
-	// Step 4: submit email and get invite link.
-	body4, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
+	// Step 5: submit the invitee's email address.
+	body5, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
 		map[string]any{
-			"executionId": execID,
-			"inputs":      map[string]string{"email": email},
-			"verbose":     true,
-			"action":      "action_submit_email",
+			"executionId":    execID,
+			"challengeToken": challengeToken,
+			"inputs":         map[string]string{"email": email},
+			"verbose":        true,
+			"action":         "action_submit_email",
 		})
 	if err != nil {
 		return "", fmt.Errorf("thunder invite user submit email: %w", err)
 	}
+	resp5, err := decodeFlow(body5, "submit email")
+	if err != nil {
+		return "", err
+	}
+	challengeToken = resp5.ChallengeToken
+
+	// Step 6: request the shareable invite link (added in Thunder v0.35 — the
+	// flow now asks whether to email the link directly or return it to the caller).
+	body6, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
+		map[string]any{
+			"executionId":    execID,
+			"challengeToken": challengeToken,
+			"inputs":         map[string]any{},
+			"verbose":        true,
+			"action":         "action_share_manually",
+		})
+	if err != nil {
+		return "", fmt.Errorf("thunder invite user get link: %w", err)
+	}
 
 	// Parse into a generic map so we can traverse whatever structure Thunder returns.
 	var raw map[string]any
-	if err := json.Unmarshal(body4, &raw); err != nil {
-		return "", fmt.Errorf("thunder invite user submit email decode: %w", err)
+	if err := json.Unmarshal(body6, &raw); err != nil {
+		return "", fmt.Errorf("thunder invite user get link decode: %w", err)
 	}
 
 	link := extractInviteLink(raw)
 	if link == "" {
-		return "", fmt.Errorf("thunder invite user: inviteLink not found in response: %s", string(body4))
+		return "", fmt.Errorf("thunder invite user: inviteLink not found in response: %s", string(body6))
 	}
 	return link, nil
 }
