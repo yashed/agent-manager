@@ -80,11 +80,17 @@ export const useAuthHooks = (): AuthHooks => {
     if (!tokenPromise) return;
     tokenPromise
       .then((token) => {
-        if (cancelled || !token) return;
+        if (cancelled) return;
+        if (!token) {
+          setAccessTokenPayload(null);
+          return;
+        }
         const decoded = decodeJWT(token);
         if (!cancelled) setAccessTokenPayload(decoded?.payload ?? null);
       })
-      .catch(() => { });
+      .catch(() => {
+        if (!cancelled) setAccessTokenPayload(null);
+      });
     return () => {
       cancelled = true;
     };

@@ -877,7 +877,7 @@ func (c *thunderClient) InviteUser(ctx context.Context, email string, ouID strin
 	}
 
 	// flowStep holds only what we need from each intermediate response.
-	var flowStep struct {
+	type inviteFlowStep struct {
 		ExecutionID    string `json:"executionId"`
 		ChallengeToken string `json:"challengeToken"`
 		Data           struct {
@@ -886,8 +886,10 @@ func (c *thunderClient) InviteUser(ctx context.Context, email string, ouID strin
 			} `json:"actions"`
 		} `json:"data"`
 	}
+	var flowStep inviteFlowStep
 
 	unmarshalStep := func(body []byte, label string) error {
+		flowStep = inviteFlowStep{}
 		if err := json.Unmarshal(body, &flowStep); err != nil {
 			return fmt.Errorf("thunder invite user %s decode: %w", label, err)
 		}
