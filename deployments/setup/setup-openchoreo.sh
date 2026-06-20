@@ -34,6 +34,11 @@ install_control_plane() {
     echo "📦 Installing/Upgrading OpenChoreo Control Plane..."
     echo "   This may take up to 10 minutes..."
 
+    # Delete the configmap before Helm runs so it is always recreated from chart defaults
+    # with a clean field manager state. Prevents Apply/Update operation splits that
+    # cause 'conflict with helm' errors on repeated setup runs.
+    kubectl delete configmap openchoreo-api-config -n openchoreo-control-plane &>/dev/null || true
+
     local install_output
     if ! install_output=$(helm upgrade --install openchoreo-control-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-control-plane \
         --version "${OPENCHOREO_VERSION}" \
@@ -62,12 +67,17 @@ install_control_plane() {
     kubectl wait -n openchoreo-control-plane --for=condition=available --timeout=300s deployment --all
 
     # ThunderID v0.44.0 uses 'client_id' (not 'sub') for client_credentials tokens.
-    # The Helm chart schema doesn't expose this setting, so patch the configmap directly.
+    # The Helm chart schema doesn't expose this setting, so patch the configmap using
+    # server-side apply (Apply operation) to stay compatible with Helm's field manager.
     echo "🔧 Patching openchoreo-api-config: service_account entitlement claim → client_id..."
     if kubectl get configmap openchoreo-api-config -n openchoreo-control-plane &>/dev/null; then
-        kubectl get configmap openchoreo-api-config -n openchoreo-control-plane -o yaml \
-            | sed 's/claim: sub/claim: client_id/g' \
-            | kubectl apply --server-side --force-conflicts -f -
+        patched_yaml=$(kubectl get configmap openchoreo-api-config -n openchoreo-control-plane -o yaml \
+            | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+        if ! echo "$patched_yaml" | grep -q "claim: client_id"; then
+            echo "❌ Failed to patch openchoreo-api-config entitlement claim to client_id"
+            return 1
+        fi
+        echo "$patched_yaml" | kubectl apply --server-side --field-manager=helm -f -
         kubectl rollout restart deployment/openchoreo-api -n openchoreo-control-plane
         kubectl rollout status deployment/openchoreo-api -n openchoreo-control-plane --timeout=120s
         echo "✅ openchoreo-api-config patched (client_id claim)"
@@ -317,17 +327,22 @@ install_thunder_extension() {
     # Fix: detect an image mismatch and do a clean uninstall+install so the
     # pre-install setup job re-runs and re-bootstraps the database.
     local target_image="ghcr.io/thunder-id/thunderid:0.44.0"
+    local selector="app.kubernetes.io/instance=amp-thunder-extension"
     if helm status amp-thunder-extension -n amp-thunder &>/dev/null; then
         local current_image
-        current_image=$(kubectl get pods -n amp-thunder \
+        current_image=$(kubectl get pods -n amp-thunder -l "$selector" \
             -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' 2>/dev/null \
             | grep -v "^$" | head -1 || echo "")
+        if [[ -z "$current_image" ]]; then
+            echo "❌ Could not determine current Thunder image; refusing destructive reset"
+            return 1
+        fi
         if [[ "$current_image" != "$target_image" ]]; then
             echo "⚠️  Thunder version mismatch (installed: '${current_image}', target: '${target_image}')"
             echo "   Uninstalling for clean reinstall (setup job must re-run with new scope format)..."
             helm uninstall amp-thunder-extension -n amp-thunder --wait --timeout=2m 2>/dev/null || true
             # Explicitly delete the PVC so the setup job initialises a fresh database
-            kubectl delete pvc -n amp-thunder --all 2>/dev/null || true
+            kubectl delete pvc -n amp-thunder -l "$selector" 2>/dev/null || true
             echo "✅ Existing Thunder release removed"
         else
             echo "   Thunder is already at target version, skipping reinstall."

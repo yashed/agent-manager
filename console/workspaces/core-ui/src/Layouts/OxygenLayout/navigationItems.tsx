@@ -106,9 +106,16 @@ export function useNavigationItems(): Array<
     }
     const s = new Set(scopeStr.split(" ").filter(Boolean));
     return {
-      resources:      s.has("amp:llm-provider:read") || s.has("amp:llm-provider-template:read"),
+      resources:
+        s.has("amp:llm-provider:read") ||
+        s.has("amp:llm-provider-template:read") ||
+        s.has("amp:mcp-server:read") ||
+        s.has("amp:llm-proxy:read"),
       evaluation:     s.has("amp:evaluator:read"),
-      infrastructure: s.has("amp:gateway:read"),
+      infrastructure:
+        s.has("amp:gateway:read") ||
+        s.has("amp:deployment-pipeline:read") ||
+        s.has("amp:environment:read"),
       identityUsers:  s.has("amp:org:invite-member") || s.has("amp:org:remove-member"),
       identityRoles:  s.has("amp:role:read") || s.has("amp:role:create") || s.has("amp:role:update") || s.has("amp:role:delete"),
       identityGroups: s.has("amp:group:read") || s.has("amp:group:create") || s.has("amp:group:update") || s.has("amp:group:delete"),
