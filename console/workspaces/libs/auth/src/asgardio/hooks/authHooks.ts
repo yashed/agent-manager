@@ -65,7 +65,8 @@ export const useAuthHooks = (): AuthHooks => {
 
   const { flattenedProfile } = useUser();
 
-  const [accessTokenPayload, setAccessTokenPayload] = useState<Record<string, unknown> | null>(null);
+  const [accessTokenPayload, setAccessTokenPayload] =
+    useState<Record<string, unknown> | null>(null);
 
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
