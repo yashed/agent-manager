@@ -102,12 +102,12 @@ export function useNavigationItems(): Array<
     }
     const s = new Set(scopeStr.split(" ").filter(Boolean));
     return {
-      resources:      s.has("llm-provider:read") || s.has("llm-provider-template:read"),
-      evaluation:     s.has("evaluator:read"),
-      infrastructure: s.has("gateway:read"),
-      identityUsers:  s.has("org:invite-member") || s.has("org:remove-member"),
-      identityRoles:  s.has("role:read") || s.has("role:create") || s.has("role:update") || s.has("role:delete"),
-      identityGroups: s.has("group:read") || s.has("group:create") || s.has("group:update") || s.has("group:delete"),
+      resources:      s.has("amp:llm-provider:read") || s.has("amp:llm-provider-template:read"),
+      evaluation:     s.has("amp:evaluator:read"),
+      infrastructure: s.has("amp:gateway:read"),
+      identityUsers:  s.has("amp:org:invite-member") || s.has("amp:org:remove-member"),
+      identityRoles:  s.has("amp:role:read") || s.has("amp:role:create") || s.has("amp:role:update") || s.has("amp:role:delete"),
+      identityGroups: s.has("amp:group:read") || s.has("amp:group:create") || s.has("amp:group:update") || s.has("amp:group:delete"),
     };
   }, [userInfo?.scope]);
 

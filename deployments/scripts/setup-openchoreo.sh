@@ -60,6 +60,21 @@ install_control_plane() {
 
     echo "⏳ Waiting for Control Plane deployments to be ready (timeout: 5 minutes)..."
     kubectl wait -n openchoreo-control-plane --for=condition=available --timeout=300s deployment --all
+
+    # ThunderID v0.44.0 uses 'client_id' (not 'sub') for client_credentials tokens.
+    # The Helm chart schema doesn't expose this setting, so patch the configmap directly.
+    echo "🔧 Patching openchoreo-api-config: service_account entitlement claim → client_id..."
+    if kubectl get configmap openchoreo-api-config -n openchoreo-control-plane &>/dev/null; then
+        kubectl get configmap openchoreo-api-config -n openchoreo-control-plane -o yaml \
+            | sed 's/claim: sub/claim: client_id/g' \
+            | kubectl apply --server-side --force-conflicts -f -
+        kubectl rollout restart deployment/openchoreo-api -n openchoreo-control-plane
+        kubectl rollout status deployment/openchoreo-api -n openchoreo-control-plane --timeout=120s
+        echo "✅ openchoreo-api-config patched (client_id claim)"
+    else
+        echo "⚠️  openchoreo-api-config not found — skipping claim patch"
+    fi
+
     echo "✅ OpenChoreo Control Plane ready"
 }
 
@@ -292,6 +307,33 @@ echo ""
 # Define installation functions for parallel execution
 install_thunder_extension() {
     echo "📦 Installing/Upgrading WSO2 AMP Thunder Extension..."
+
+    # Thunder's setup job is annotated 'pre-install' only — it does NOT run on
+    # 'helm upgrade'. Between v0.34 and v0.44 the scope/permission format changed
+    # (derivePermission now prefixes RS handle: gateway:create → amp:gateway:create).
+    # If we just upgrade, the old database retains the un-prefixed format and every
+    # M2M token request for amp:* scopes will fail.
+    #
+    # Fix: detect an image mismatch and do a clean uninstall+install so the
+    # pre-install setup job re-runs and re-bootstraps the database.
+    local target_image="ghcr.io/thunder-id/thunderid:0.44.0"
+    if helm status amp-thunder-extension -n amp-thunder &>/dev/null; then
+        local current_image
+        current_image=$(kubectl get pods -n amp-thunder \
+            -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' 2>/dev/null \
+            | grep -v "^$" | head -1 || echo "")
+        if [[ "$current_image" != "$target_image" ]]; then
+            echo "⚠️  Thunder version mismatch (installed: '${current_image}', target: '${target_image}')"
+            echo "   Uninstalling for clean reinstall (setup job must re-run with new scope format)..."
+            helm uninstall amp-thunder-extension -n amp-thunder --wait --timeout=2m 2>/dev/null || true
+            # Explicitly delete the PVC so the setup job initialises a fresh database
+            kubectl delete pvc -n amp-thunder --all 2>/dev/null || true
+            echo "✅ Existing Thunder release removed"
+        else
+            echo "   Thunder is already at target version, skipping reinstall."
+        fi
+    fi
+
     helm upgrade --install amp-thunder-extension "${SCRIPT_DIR}/../helm-charts/wso2-amp-thunder-extension" \
         --namespace amp-thunder --create-namespace
     echo "✅ AMP Thunder Extension installed/upgraded successfully"
