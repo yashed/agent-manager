@@ -206,11 +206,6 @@ data:
           \"email\": {
             \"type\": \"string\",
             \"displayName\": \"Email\"
-          },
-          \"groups\": {
-            \"type\": \"array\",
-            \"displayName\": \"Groups\",
-            \"items\": {\"type\": \"string\"}
           }
         },
         \"systemAttributes\": {
@@ -254,8 +249,7 @@ data:
           \"username\": \"{{ .username }}\",
           \"password\": \"{{ .password }}\",
           \"given_name\": \"{{ .givenName }}\",
-          \"family_name\": \"{{ .familyName }}\",
-          \"groups\": {{ .groups | toJson | replace "\"" "\\\"" }}
+          \"family_name\": \"{{ .familyName }}\"
         }
       }")
 
