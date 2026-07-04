@@ -901,6 +901,48 @@ fi
 
 wait_for_pods "openchoreo-control-plane" "${TIMEOUT_CONTROL_PLANE}"
 
+# ----------------------------------------------------------------------------
+# ThunderID v0.45 identity migration (sub -> client_id) for the control plane.
+# v0.45 client_credentials tokens carry the client identity in 'client_id'
+# (sub is now a random UUID). OpenChoreo still resolves service accounts by
+# 'claim: sub', so without these patches every service-account call returns 403
+# (project/agent create) and environment creation fails. The chart schema does
+# not expose the claim, so patch the configmap via server-side apply (Apply op,
+# helm field manager) and migrate OpenChoreo's built-in ClusterAuthzRoleBindings.
+# ----------------------------------------------------------------------------
+log_info "Patching openchoreo-api-config: service_account entitlement claim -> client_id..."
+if kubectl get configmap openchoreo-api-config -n openchoreo-control-plane &>/dev/null; then
+    patched_yaml=$(kubectl get configmap openchoreo-api-config -n openchoreo-control-plane -o yaml \
+        | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+    if echo "$patched_yaml" | grep -q "claim: client_id"; then
+        echo "$patched_yaml" | kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+        kubectl rollout restart deployment/openchoreo-api -n openchoreo-control-plane
+        kubectl rollout status deployment/openchoreo-api -n openchoreo-control-plane --timeout=120s
+        log_success "openchoreo-api-config patched (client_id claim)"
+    else
+        log_error "Failed to patch openchoreo-api-config entitlement claim to client_id"
+        exit 1
+    fi
+else
+    log_warning "openchoreo-api-config not found - skipping claim patch"
+fi
+
+log_info "Migrating service-account ClusterAuthzRoleBindings: claim sub -> client_id..."
+for binding in $(kubectl get clusterauthzrolebindings.openchoreo.dev \
+    -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true); do
+    claim=$(kubectl get clusterauthzrolebinding.openchoreo.dev "$binding" \
+        -o jsonpath='{.spec.entitlement.claim}' 2>/dev/null || true)
+    if [ "$claim" = "sub" ]; then
+        if kubectl patch clusterauthzrolebinding.openchoreo.dev "$binding" \
+            --type=merge -p '{"spec":{"entitlement":{"claim":"client_id"}}}' >/dev/null 2>&1; then
+            log_info "  migrated ${binding}"
+        else
+            log_warning "  failed to migrate ClusterAuthzRoleBinding '${binding}'"
+        fi
+    fi
+done
+log_success "Service-account bindings migrated to client_id"
+
 # ============================================================================
 # Step 8: Install OpenChoreo Data Plane
 # ============================================================================
@@ -1271,6 +1313,25 @@ else
     log_error "Failed to install opensearch based tracing module (non-fatal)"
 fi
 
+# ThunderID v0.45: the observer resolves service accounts from its own config
+# (observer-auth-config), still keyed on 'claim: sub'. Patch to client_id, else
+# agent build-log / observability queries return 403.
+log_info "Patching observer-auth-config: service_account entitlement claim -> client_id..."
+if kubectl get configmap observer-auth-config -n openchoreo-observability-plane &>/dev/null; then
+    patched_obs_yaml=$(kubectl get configmap observer-auth-config -n openchoreo-observability-plane -o yaml \
+        | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+    if echo "$patched_obs_yaml" | grep -q "claim: client_id"; then
+        echo "$patched_obs_yaml" | kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+        kubectl rollout restart deployment/observer -n openchoreo-observability-plane
+        kubectl rollout status deployment/observer -n openchoreo-observability-plane --timeout=120s
+        log_success "observer-auth-config patched (client_id claim)"
+    else
+        log_warning "observer-auth-config has no 'sub' claim to patch - skipping"
+    fi
+else
+    log_warning "observer-auth-config not found - skipping observer claim patch"
+fi
+
 # Register Observability Plane with Control Plane
 log_info "Registering Observability Plane with Control Plane..."
 wait_for_secret "openchoreo-observability-plane" "cluster-agent-tls" 180
@@ -1445,6 +1506,24 @@ fi
 log_success "Platform Resources Extension installed successfully"
 echo ""
 
+# Provision per-environment Thunder instance for the default environment.
+# Mirrors setup-openchoreo.sh:install_default_env_thunder().
+# Must run after the default environment exists (created by platform-resources above).
+# The wait for the platform Thunder TLS cert is handled internally by add-environment-thunder.sh.
+
+log_info "Provisioning Thunder identity provider for the default environment..."
+ENV_THUNDER_PROVISIONED=false
+if ! install_default_env_thunder; then
+    log_warning "Default environment Thunder provisioning failed (non-fatal)"
+    echo "Re-run manually once the platform is ready:"
+    echo "  ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"
+    echo "  bash <(curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh)"
+else
+    log_success "Default environment Thunder identity provider provisioned"
+    ENV_THUNDER_PROVISIONED=true
+fi
+echo ""
+
 # Install observability extension
 log_info "Installing Observability Extension (Traces Observer)..."
 if ! install_observability_extension; then
@@ -1536,6 +1615,32 @@ if [[ "${SHOW_LOCALHOST_URLS:-true}" == "true" ]]; then
   log_info "Agent Management Platform Console: http://localhost:3000"
   log_info "Observability Gateway (for traces): http://localhost:22893/otel"
 fi
+
+# Print the default environment's Thunder ID console + admin credentials — the
+# release/namespace/host follow the fixed ENV_NAME=default ORG_NAME=default naming
+# convention (see thunder_release_name/thunder_namespace/thunder_host in
+# deployments/scripts/thunder-naming.sh). The password lives only in a K8s Secret (never written
+# to disk by add-environment-thunder.sh), so it's fetched fresh here rather than
+# re-printed from that script's own (long since scrolled-past) console output.
+if [[ "${ENV_THUNDER_PROVISIONED}" == "true" ]]; then
+  # Dynamically derive the coordinates using the shared naming helper.
+  # Avoids hardcoded literals which would break if custom org/env names are used
+  # or if the derived names are hash-truncated (natural names > 53 chars).
+  default_org="default"
+  default_env="default"
+  default_release="$(thunder_release_name "${default_org}" "${default_env}")"
+  default_ns="${default_release}"
+
+  ENV_THUNDER_ADMIN_PASSWORD="$(kubectl get secret "${default_release}-admin-credentials" \
+    -n "${default_ns}" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+  if [[ -n "${ENV_THUNDER_ADMIN_PASSWORD}" ]]; then
+    log_step "Default Environment Thunder ID Console"
+    log_info "URL:      http://${default_org}-${default_env}.thunder.amp.localhost:8080/console"
+    log_info "Username: admin"
+    log_info "Password: ${ENV_THUNDER_ADMIN_PASSWORD}"
+  fi
+fi
+
 echo ""
 echo ""
 log_info "To check status: kubectl get pods -A"

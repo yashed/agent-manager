@@ -1,0 +1,51 @@
+name: "✍️ Create a Task"
+description: Create a new task.
+title: "[Task]: "
+type: task
+labels: ["Type/Task"]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Please select the area the issue is related to
+      multiple: true
+      options:
+        - Area/Agent Lifecycle (Agent create, configure, kinds, build, test, deploy, keys/tokens)
+        - Area/Observability (Traces, metrics, logs, monitors, scores)
+        - Area/Infrastructure (Environments, deployment pipelines, infra resources, gateway integration)
+        - Area/LLM & MCP Governance (LLM providers, LLM proxy, MCP proxy, provider keys)
+        - Area/Org & User Management (Projects, organizations, identities, RBAC, multi-tenancy)
+        - Area/Console (Web UI shell, navigation, cross-cutting frontend)
+        - Area/Evaluation (Evaluation jobs, evaluators)
+        - Area/Other (Anything else which does not match above categories)
+    validations:
+      required: true
+  - type: dropdown
+    id: aspect
+    attributes:
+      label: Please select the aspect the issue is related to
+      multiple: true
+      options:
+        - Aspect/Agent Configuration (Agent configuration, kinds, build options)
+        - Aspect/Build & Deploy (Agent build, test, deploy, keys/tokens, agent security)
+        - Aspect/Traces (Distributed traces)
+        - Aspect/Metrics & Logs (Metrics, dashboards, logs)
+        - Aspect/Monitors & Scores (Monitors and scores)
+        - Aspect/Environments & Pipelines (Environments and deployment pipelines)
+        - Aspect/Infra Resources (Infrastructure resources)
+        - Aspect/Gateway (Gateway catalog sync, routing, gateway IdPs)
+        - Aspect/LLM & MCP (LLM providers, LLM proxy, provider keys, MCP proxy)
+        - Aspect/Projects & Orgs (Projects and organizations)
+        - Aspect/Identity & Access (Identities, identity providers, roles, permissions, tenancy)
+        - Aspect/UI (Layouts, navigation, components, styling)
+        - Aspect/Evaluation (Evaluators and evaluation jobs)
+        - Aspect/Other (Anything else which does not match above categories)
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of what needs to be done.
+    validations:
+      required: true

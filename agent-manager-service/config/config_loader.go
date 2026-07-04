@@ -114,7 +114,7 @@ func loadEnvs() {
 		SDKVolumeName: r.readOptionalString("OTEL_SDK_VOLUME_NAME", "otel-tracing-sdk-volume"),
 		SDKMountPath:  r.readOptionalString("OTEL_SDK_MOUNT_PATH", "/otel-tracing-sdk"),
 
-		DefaultInstrumentationVersion: r.readOptionalString("OTEL_DEFAULT_INSTRUMENTATION_VERSION", "0.3.0"),
+		DefaultInstrumentationVersion: r.readOptionalString("OTEL_DEFAULT_INSTRUMENTATION_VERSION", "0.4.0"),
 
 		InstrumentationExtensionPath: r.readOptionalString("INSTRUMENTATION_EXTENSION_PATH", "/etc/amp/instrumentation-extension.yaml"),
 
@@ -153,6 +153,7 @@ func loadEnvs() {
 	}
 	config.IsOnPremDeployment = r.readOptionalBool("IS_ON_PREM_DEPLOYMENT", true)
 	config.ServerPublicURL = r.readOptionalString("SERVER_PUBLIC_URL", "")
+	config.ThunderHostBaseDomain = r.readOptionalString("THUNDER_HOST_BASE_DOMAIN", "amp.localhost")
 	config.OAuthAuthorizationServers = r.readOptionalStringList("OAUTH_AUTHORIZATION_SERVERS", "")
 	config.OAuthScopesSupported = r.readOptionalStringList("OAUTH_SCOPES_SUPPORTED", "")
 
@@ -235,12 +236,13 @@ func loadEnvs() {
 	}
 
 	config.RBACEnabled = r.readOptionalBool("RBAC_ENABLED", false)
+	config.RootOUHandle = r.readOptionalString("ROOT_OU_HANDLE", "admin")
 
 	// Resource limits for agent resource configurations (operator-controlled ceilings)
 	config.PerAgentResourceLimits = ResourceLimitsConfig{
 		MaxReplicas: int(r.readOptionalInt64("RESOURCE_MAX_REPLICAS", 10)),
 		MaxCPU:      r.readOptionalString("RESOURCE_MAX_CPU", "500m"),
-		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "512Mi"),
+		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "1Gi"),
 	}
 
 	// Gateway runtime addressing — how RestApi bindings reach the API Platform Gateway
