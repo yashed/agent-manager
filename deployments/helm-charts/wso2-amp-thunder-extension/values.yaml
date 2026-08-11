@@ -19,7 +19,7 @@ thunder:
     image:
       registry: ghcr.io/thunder-id
       repository: thunderid
-      tag: "1.0.0-beta"
+      tag: "1.0.0-beta2"
       pullPolicy: Always
     container:
       port: 8090
