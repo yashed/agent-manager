@@ -42,13 +42,10 @@ assert_eq "vm_host thunder" "thunder.amp.203.0.113.10.sslip.io" "$(vm_host thund
 
 # --- build_amp_helm_args (external gateways on by default) ---
 amp="$(build_amp_helm_args 203.0.113.10 true)"
-# Service settings are emitted under BOTH chart keys (agentManager + agentManagerService).
+# Service settings use the current chart key only.
 assert_eq "amp serverPublicURL (service key)" \
   "agentManagerService.config.serverPublicURL=https://api.amp.203.0.113.10.sslip.io" \
   "$(grep -F 'agentManagerService.config.serverPublicURL' <<<"$amp")"
-assert_eq "amp serverPublicURL (legacy key)" \
-  "agentManager.config.serverPublicURL=https://api.amp.203.0.113.10.sslip.io" \
-  "$(grep -F 'agentManager.config.serverPublicURL' <<<"$amp")"
 assert_eq "amp oauthAuthorizationServers (service key)" \
   "agentManagerService.config.oauthAuthorizationServers=https://thunder.amp.203.0.113.10.sslip.io" \
   "$(grep -F 'agentManagerService.config.oauthAuthorizationServers' <<<"$amp")"
@@ -62,16 +59,13 @@ assert_eq "amp keyManager.audience carries the public API URL (service key)" "ye
   "$(has "$amp" 'agentManagerService.config.keyManager.audience=urn:wso2:amp\,')"
 assert_eq "amp keyManager.audience ends with the public API URL (service key)" "yes" \
   "$(has "$amp" 'am-mcp\,https://api.amp.203.0.113.10.sslip.io/')"
-assert_eq "amp keyManager.audience carries the public API URL (legacy key)" "yes" \
-  "$(has "$amp" 'agentManager.config.keyManager.audience=urn:wso2:amp\,')"
 # tlsEnabled=true makes amp-api advertise the https deployed-agent endpoint variant;
-# emitted under both keys (old agentManager + new agentManagerService).
+# it is emitted under the current agentManagerService key.
 assert_eq "amp tlsEnabled (service key)" \
   "agentManagerService.config.tlsEnabled=true" \
   "$(grep -F 'agentManagerService.config.tlsEnabled' <<<"$amp")"
-assert_eq "amp tlsEnabled (legacy key)" \
-  "agentManager.config.tlsEnabled=true" \
-  "$(grep -F 'agentManager.config.tlsEnabled' <<<"$amp")"
+assert_eq "amp values omit removed legacy agentManager key" "no" \
+  "$(has "$amp" 'agentManager.config.')"
 assert_eq "amp console apiBaseUrl" \
   "console.config.apiBaseUrl=https://api.amp.203.0.113.10.sslip.io" \
   "$(grep -F 'config.apiBaseUrl' <<<"$amp")"

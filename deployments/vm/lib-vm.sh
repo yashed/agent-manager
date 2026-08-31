@@ -52,24 +52,21 @@ vm_host() {
 # call (users/roles/groups).
 # shellcheck disable=SC2154  # AMP_HOST_* come from the caller's scope by design.
 amp_helm_args() {
-  local k
-  for k in agentManager agentManagerService; do
-    printf '%s\n' \
-      "--set" "${k}.config.serverPublicURL=https://${AMP_HOST_API}" \
-      "--set" "${k}.config.oauthAuthorizationServers=https://${AMP_HOST_THUNDER}" \
-      "--set" "${k}.config.keyManager.issuer=https://${AMP_HOST_THUNDER}" \
-      "--set" "${k}.config.keyManager.audience=urn:wso2:amp\,amp-console-client\,amp-api-client\,amp-publisher-*\,amctl\,am-mcp\,https://${AMP_HOST_API}/" \
-      "--set" "${k}.config.thunder.baseURL=https://${AMP_HOST_THUNDER}" \
-      "--set" "${k}.config.thunder.resolveToHost=amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090" \
-      "--set" "${k}.config.tlsEnabled=true" \
-      "--set" "${k}.config.idpHostBaseDomain=${AMP_HOST_THUNDER#thunder.}" \
-      "--set" "${k}.config.agentsBaseDomain=${AMP_AGENTS_BASE}" \
-      "--set" "${k}.config.agentsHttpPort=443" \
-      "--set" "${k}.config.agentsHttpsPort=443" \
-      "--set" "${k}.config.gatewayBaseDomain=${AMP_HOST_GATEWAY}" \
-      "--set" "${k}.config.gatewayVhostScheme=https" \
-      "--set" "${k}.config.gatewayVhostPort=443"
-  done
+  printf '%s\n' \
+    "--set" "agentManagerService.config.serverPublicURL=https://${AMP_HOST_API}" \
+    "--set" "agentManagerService.config.oauthAuthorizationServers=https://${AMP_HOST_THUNDER}" \
+    "--set" "agentManagerService.config.keyManager.issuer=https://${AMP_HOST_THUNDER}" \
+    "--set" "agentManagerService.config.keyManager.audience=urn:wso2:amp\,amp-console-client\,amp-api-client\,amp-publisher-*\,amctl\,am-mcp\,https://${AMP_HOST_API}/" \
+    "--set" "agentManagerService.config.thunder.baseURL=https://${AMP_HOST_THUNDER}" \
+    "--set" "agentManagerService.config.thunder.resolveToHost=amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090" \
+    "--set" "agentManagerService.config.tlsEnabled=true" \
+    "--set" "agentManagerService.config.idpHostBaseDomain=${AMP_HOST_THUNDER#thunder.}" \
+    "--set" "agentManagerService.config.agentsBaseDomain=${AMP_AGENTS_BASE}" \
+    "--set-string" "agentManagerService.config.agentsHttpPort=443" \
+    "--set-string" "agentManagerService.config.agentsHttpsPort=443" \
+    "--set" "agentManagerService.config.gatewayBaseDomain=${AMP_HOST_GATEWAY}" \
+    "--set" "agentManagerService.config.gatewayVhostScheme=https" \
+    "--set-string" "agentManagerService.config.gatewayVhostPort=443"
 
   printf '%s\n' \
     "--set" "console.config.auth.baseUrl=https://${AMP_HOST_THUNDER}" \
@@ -79,7 +76,7 @@ amp_helm_args() {
     "--set" "agentManagerService.config.amObserverPublicURL=https://${AMP_HOST_OBSERVER}" \
     "--set" "console.config.instrumentationUrl=https://${AMP_HOST_GATEWAY}/otel" \
     "--set" "console.config.idpHostBaseDomain=${AMP_HOST_THUNDER#thunder.}" \
-    "--set" "console.config.tlsEnabled=true"
+    "--set-string" "console.config.tlsEnabled=true"
 
   # Console and API are ClusterIP behind the OC control-plane kgateway; their
   # HTTPRoutes must match the public hosts Caddy forwards (Host is preserved).
