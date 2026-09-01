@@ -291,12 +291,26 @@ func buildInternalAgentFromSourceComponentRequestBody(namespaceName, projectName
 			AutoDeploy: &autoDeploy,
 			Parameters: &parameters,
 			Workflow: &gen.ComponentWorkflowConfig{
+				Kind:       &componentWorkflowKind,
 				Name:       componentWorkflowName,
 				Parameters: &componentWorkflowParameters,
 			},
 		},
 	}, nil
 }
+
+// componentWorkflowKind is the kind recorded on a Component's workflow reference.
+//
+// The namespaced Workflow is used rather than the cluster-scoped ClusterWorkflow:
+// a ClusterWorkflow pins workflowPlaneRef to the single cluster-wide
+// ClusterWorkflowPlane, so its builds always run on that one plane. A namespaced
+// Workflow resolves the WorkflowPlane inside the organization's own namespace,
+// which is what lets an org build on the data centre it actually belongs to.
+//
+// Recorded on the Component so each agent keeps the kind it was created with:
+// builds.go reads this and only falls back to ClusterWorkflow when it is unset,
+// which is the case for agents created before this change.
+var componentWorkflowKind = gen.ComponentWorkflowConfigKindWorkflow
 
 func getOpenChoreoComponentType(provisioningType string, agentType string) (string, error) {
 	if provisioningType == string(utils.ExternalAgent) {
@@ -580,6 +594,57 @@ func normalizePath(path string) string {
 // is relative to the repository root (as expected by the workflow).
 func resolveDockerfilePath(appPath, dockerfilePath string) string {
 	return normalizePath(appPath) + "/" + strings.TrimPrefix(normalizePath(dockerfilePath), "/")
+}
+
+// ComponentReconcileBlock describes a Ready=False condition that stops OpenChoreo from cutting
+// new ComponentReleases for a component.
+type ComponentReconcileBlock struct {
+	Reason  string
+	Message string
+}
+
+// GetComponentReconcileBlock returns the blocking Ready condition for a component, or nil when it
+// reconciles normally. An absent Ready condition counts as not blocked — the component simply has
+// not been reconciled yet, which is not evidence of a problem.
+func (c *openChoreoClient) GetComponentReconcileBlock(ctx context.Context, ouID, componentName string) (*ComponentReconcileBlock, error) {
+	namespaceName := c.NamespaceFor(ouID)
+	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get component resource: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON404: resp.JSON404,
+			JSON500: resp.JSON500,
+		})
+	}
+	if resp.JSON200 == nil || resp.JSON200.Status == nil {
+		return nil, nil //nolint:nilnil // documented contract: a nil block means "not blocked", not an error
+	}
+	return reconcileBlockFromConditions(resp.JSON200.Status.Conditions), nil
+}
+
+// reconcileBlockFromConditions returns the blocking Ready condition, or nil when none applies.
+func reconcileBlockFromConditions(conditions *[]gen.Condition) *ComponentReconcileBlock {
+	if conditions == nil {
+		return nil
+	}
+	for _, cond := range *conditions {
+		if cond.Type != BindingStatusReady || cond.Status != "False" {
+			continue
+		}
+		if _, blocking := componentBlockingReasons[cond.Reason]; !blocking {
+			continue
+		}
+		block := &ComponentReconcileBlock{Reason: cond.Reason}
+		if cond.Message != nil {
+			block.Message = *cond.Message
+		}
+		return block
+	}
+	return nil
 }
 
 func (c *openChoreoClient) GetComponent(ctx context.Context, ouID, projectName, componentName string) (*models.AgentResponse, error) {

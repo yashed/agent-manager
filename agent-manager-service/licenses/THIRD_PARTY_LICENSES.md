@@ -22,4 +22,3 @@ Direct (non-indirect) dependencies from `go.mod`, cross-checked against vendored
 | gorm.io/driver/postgres | MIT | https://github.com/go-gorm/postgres/blob/master/License |
 | gorm.io/gorm | MIT | https://github.com/go-gorm/gorm/blob/master/LICENSE |
 | k8s.io/apimachinery | Apache-2.0 | https://github.com/kubernetes/apimachinery/blob/master/LICENSE |
-

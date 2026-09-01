@@ -81,10 +81,13 @@ func CreateMockOpenChoreoClient() *clientmocks.OpenChoreoClientMock {
 		UpdateComponentDeploymentConfigFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string, req client.ComponentDeploymentConfigRequest) error {
 			return nil
 		},
-		TriggerBuildFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string, commitID string) (*models.BuildResponse, error) {
+		TriggerBuildFunc: func(_ context.Context, namespaceName string, projectName string, componentName string, commitID string, workflowRunName string) (*models.BuildResponse, error) {
+			if workflowRunName == "" {
+				workflowRunName = fmt.Sprintf("%s-build-1", componentName)
+			}
 			return &models.BuildResponse{
 				UUID:        uuid.New().String(),
-				Name:        fmt.Sprintf("%s-build-1", componentName),
+				Name:        workflowRunName,
 				AgentName:   componentName,
 				ProjectName: projectName,
 				Status:      "BuildInitiated",
@@ -196,6 +199,11 @@ func CreateMockOpenChoreoClient() *clientmocks.OpenChoreoClientMock {
 		},
 		ReplaceComponentFileMountsFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string, files []client.FileVar) error {
 			return nil
+		},
+		// nil means OpenChoreo can reconcile the component; deploy aborts early otherwise.
+		GetComponentReconcileBlockFunc: func(ctx context.Context, namespaceName string, componentName string) (*client.ComponentReconcileBlock, error) {
+			// A nil block is the "not blocked" signal this API defines.
+			return nil, nil
 		},
 		RemoveWorkloadEnvVarsFunc: func(ctx context.Context, namespaceName string, componentName string, envVarKeys []string) error {
 			return nil

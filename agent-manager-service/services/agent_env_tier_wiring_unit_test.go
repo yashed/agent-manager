@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -74,6 +75,9 @@ func wiringService(envs map[string]bool) (*agentManagerService, *string) {
 	var checked string
 	return &agentManagerService{
 		ocClient: &clientmocks.OpenChoreoClientMock{
+			GetComponentReconcileBlockFunc: func(context.Context, string, string) (*client.ComponentReconcileBlock, error) {
+				return nil, nil //nolint:nilnil // a nil block means the component can reconcile
+			},
 			IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) {
 				return false, nil
 			},

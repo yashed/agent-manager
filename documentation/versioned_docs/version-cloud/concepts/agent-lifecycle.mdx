@@ -45,4 +45,3 @@ An agent's deployment status is tracked independently for each environment it ta
 | `suspended` | Previously deployed, then stopped by the suspend action. |
 
 The distinction between `in-progress` and `active` matters in practice, an agent whose configuration has been applied but whose container is still booting is reported as `in-progress` rather than `active`, so callers don't invoke it and receive a `503`.
-

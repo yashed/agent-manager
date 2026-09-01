@@ -163,6 +163,27 @@ const (
 const resourceKindSandboxWarmPool = "SandboxWarmPool"
 
 // -----------------------------------------------------------------------------
+// Component reconcile-blocking condition reasons
+// -----------------------------------------------------------------------------
+
+// componentBlockingReasons are the Ready=False reasons that stop the Component controller before
+// it cuts a new ComponentRelease. While one holds, writes to the Component and Workload are
+// accepted but never reach a pod — the ReleaseBinding keeps rendering the previous snapshot.
+//
+// An allow-list, not "any Ready=False": WorkloadNotFound is the normal pre-build state and
+// Progressing is healthy, so blocking on those would refuse legitimate deploys. Unknown reasons
+// therefore fail open.
+var componentBlockingReasons = map[string]struct{}{
+	"ComponentTypeNotFound":      {},
+	"InvalidConfiguration":       {},
+	"ProjectNotFound":            {},
+	"DeploymentPipelineNotFound": {},
+	"TraitNotFound":              {},
+	"WorkflowNotFound":           {},
+	"WorkflowNotAllowed":         {},
+}
+
+// -----------------------------------------------------------------------------
 // OpenChoreo binding status values
 // -----------------------------------------------------------------------------
 
@@ -210,6 +231,13 @@ const (
 type LabelKeys string
 
 const (
+	// LabelKeyOrgUUID carries the organization's UUID. Unlike the keys below it
+	// is not an openchoreo.dev key: it belongs to the platform that provisions
+	// the organization, and it is a UUID rather than a name because the systems
+	// that consume it key on one. It is stamped onto the cell namespace so usage
+	// measured from pod metrics can be attributed to an organization.
+	LabelKeyOrgUUID LabelKeys = "cloud.wso2.com/orguuid"
+
 	LabelKeyOrganizationName     LabelKeys = "openchoreo.dev/organization"
 	LabelKeyProjectName          LabelKeys = "openchoreo.dev/project"
 	LabelKeyComponentName        LabelKeys = "openchoreo.dev/component"

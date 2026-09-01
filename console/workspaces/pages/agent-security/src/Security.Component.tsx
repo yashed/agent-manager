@@ -25,6 +25,7 @@ import {
   useGetAgentConfigurations,
   useListAgentDeployments,
   useListAgentAPIKeys,
+  useListIdentityProviders,
   useRevokeAgentAPIKey,
 } from "@agent-management-platform/api-client";
 import {
@@ -59,6 +60,17 @@ export const SecurityComponent: React.FC = () => {
 
   const securityEnabled = envConfig?.enableApiKeySecurity ?? true;
   const oauthEnabled = envConfig?.enableOAuthSecurity ?? false;
+
+  // OAuth is enforced by an identity provider registered on the environment's
+  // *gateway* — unrelated to Agent ID. Resolve that gateway so the empty state can
+  // deep-link to it. Only the org-wide listing carries gateway/environment context
+  // (see enrichSpecIdentityProvider), so filter it by the current environment.
+  const { data: identityProviders } = useListIdentityProviders({
+    orgName: oauthEnabled ? orgId : undefined,
+  });
+  const oauthGatewayId = identityProviders?.list?.find(
+    (p) => p.environmentName === envId && !!p.gatewayId,
+  )?.gatewayId;
   const currentDeployment = envId ? deployments?.[envId] : undefined;
   const hasActiveDeployment = currentDeployment?.status === "active";
   const shouldLoadKeys =
@@ -120,15 +132,20 @@ export const SecurityComponent: React.FC = () => {
         illustration: <KeyRound size={48} />,
         title: "This agent uses OAuth",
         description: "Manage OAuth authentication from the configured identity provider.",
-        action: orgId && envId ? (
+        action: orgId ? (
           <Button
             variant="outlined"
             component={Link}
-            to={generatePath(
-              absoluteRouteMap.children.org.children.environments.children.view.children
-                .identityProvider.path,
-              { orgId, envName: envId },
-            )}
+            to={
+              oauthGatewayId
+                ? generatePath(
+                    absoluteRouteMap.children.org.children.gateways.children.view.path,
+                    { orgId, gatewayId: oauthGatewayId },
+                  )
+                : generatePath(absoluteRouteMap.children.org.children.gateways.path, {
+                    orgId,
+                  })
+            }
           >
             View Identity Provider
           </Button>

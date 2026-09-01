@@ -43,7 +43,11 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
-import { absoluteRouteMap } from "@agent-management-platform/types";
+import {
+  absoluteRouteMap,
+  globalConfig,
+  isAgentIdentityEnabled,
+} from "@agent-management-platform/types";
 import {
   useGetAgent,
   useTokenScopes,
@@ -101,6 +105,7 @@ export function useNavigationItems(): Array<
   });
   const { environments, isLoading: isLoadingEnvironments } =
     usePipelineEnvironmentsState(orgId, projectId);
+  const agentIdEnabled = isAgentIdentityEnabled();
 
   const externalNavItems = useExternalNavItems();
   const { enforced, resolved: scopesResolved, scopes } = useTokenScopes();
@@ -199,6 +204,60 @@ export function useNavigationItems(): Array<
   ).environments;
   const evaluatorsOrgRoute = absoluteRouteMap.children.org.children.evaluators;
 
+  // Security section shared by the internal-agent menus below: Agent ID, plus
+  // gateway credentials for agent-api agents. Spread as a section only when it
+  // has items, so disabling Agent ID for a non-agent-api agent leaves no empty
+  // section header behind.
+  const agentSecurityItems: NavigationItem[] = [
+    ...(agentIdEnabled
+      ? [
+          {
+            label: "Agent ID",
+            type: "item" as const,
+            icon: <thunderInstancesMetadata.icon size={20} />,
+            isActive: !!matchPath(
+              agentsChildren.agentId?.wildPath ?? "",
+              pathname,
+            ),
+            href: generatePath(agentsChildren.agentId?.path ?? "", {
+              orgId,
+              projectId,
+              agentId,
+            }),
+          },
+        ]
+      : []),
+    ...(agent?.agentType?.type === "agent-api"
+      ? [
+          {
+            label: "Credentials",
+            type: "item" as const,
+            icon: <ShieldCheck size={20} />,
+            isActive: !!matchPath(
+              absoluteRouteMap.children.org.children.projects.children.agents
+                .children.environment.children.security.wildPath,
+              pathname,
+            ),
+            href: generatePath(
+              absoluteRouteMap.children.org.children.projects.children.agents
+                .children.environment.children.security.path,
+              { orgId, projectId, agentId, envId: defaultEnv },
+            ),
+          },
+        ]
+      : []),
+  ];
+  const agentSecuritySections: NavigationSection[] = agentSecurityItems.length
+    ? [
+        {
+          title: "Security",
+          type: "section",
+          icon: <ShieldCheck />,
+          items: agentSecurityItems,
+        },
+      ]
+    : [];
+
   // An unread scope set is not an empty one. Rendering the navigation before the
   // access token has been decoded would show the sections a caller with no
   // permissions sees, then rearrange the sidebar under them once the scopes
@@ -263,28 +322,34 @@ export function useNavigationItems(): Array<
           },
         ],
       },
-      {
-        title: "Security",
-        type: "section",
-        icon: <ShieldCheck />,
-        items: [
-          {
-            label: "Agent ID",
-            type: "item",
-            icon: <thunderInstancesMetadata.icon size={20} />,
-            isActive: !!matchPath(
-              absoluteRouteMap.children.org.children.projects.children.agents
-                .children.agentId.wildPath,
-              pathname,
-            ),
-            href: generatePath(
-              absoluteRouteMap.children.org.children.projects.children.agents
-                .children.agentId.path,
-              { orgId, projectId, agentId },
-            ),
-          },
-        ],
-      },
+      // Agent ID is the only Security item for external agents, so the whole
+      // section goes away when the feature is disabled.
+      ...(agentIdEnabled
+        ? [
+            {
+              title: "Security",
+              type: "section" as const,
+              icon: <ShieldCheck />,
+              items: [
+                {
+                  label: "Agent ID",
+                  type: "item" as const,
+                  icon: <thunderInstancesMetadata.icon size={20} />,
+                  isActive: !!matchPath(
+                    absoluteRouteMap.children.org.children.projects.children
+                      .agents.children.agentId.wildPath,
+                    pathname,
+                  ),
+                  href: generatePath(
+                    absoluteRouteMap.children.org.children.projects.children
+                      .agents.children.agentId.path,
+                    { orgId, projectId, agentId },
+                  ),
+                },
+              ],
+            },
+          ]
+        : []),
       {
         title: "Observability",
         type: "section",
@@ -401,46 +466,7 @@ export function useNavigationItems(): Array<
           },
         ],
       },
-      {
-        title: "Security",
-        type: "section",
-        icon: <ShieldCheck />,
-        items: [
-          {
-            label: "Agent ID",
-            type: "item" as const,
-            icon: <thunderInstancesMetadata.icon size={20} />,
-            isActive: !!matchPath(
-              agentsChildren.agentId?.wildPath ?? "",
-              pathname,
-            ),
-            href: generatePath(agentsChildren.agentId?.path ?? "", {
-              orgId,
-              projectId,
-              agentId,
-            }),
-          },
-          ...(agent?.agentType?.type === "agent-api"
-            ? [
-                {
-                  label: "Credentials",
-                  type: "item" as const,
-                  icon: <ShieldCheck size={20} />,
-                  isActive: !!matchPath(
-                    absoluteRouteMap.children.org.children.projects.children
-                      .agents.children.environment.children.security.wildPath,
-                    pathname,
-                  ),
-                  href: generatePath(
-                    absoluteRouteMap.children.org.children.projects.children
-                      .agents.children.environment.children.security.path,
-                    { orgId, projectId, agentId, envId: defaultEnv },
-                  ),
-                },
-              ]
-            : []),
-        ],
-      },
+      ...agentSecuritySections,
       {
         title: "Observability",
         type: "section",
@@ -628,46 +654,7 @@ export function useNavigationItems(): Array<
           },
         ],
       },
-      {
-        title: "Security",
-        type: "section",
-        icon: <ShieldCheck />,
-        items: [
-          {
-            label: "Agent ID",
-            type: "item" as const,
-            icon: <thunderInstancesMetadata.icon size={20} />,
-            isActive: !!matchPath(
-              agentsChildren.agentId?.wildPath ?? "",
-              pathname,
-            ),
-            href: generatePath(agentsChildren.agentId?.path ?? "", {
-              orgId,
-              projectId,
-              agentId,
-            }),
-          },
-          ...(agent?.agentType?.type === "agent-api"
-            ? [
-                {
-                  label: "Credentials",
-                  type: "item" as const,
-                  icon: <ShieldCheck size={20} />,
-                  isActive: !!matchPath(
-                    absoluteRouteMap.children.org.children.projects.children
-                      .agents.children.environment.children.security.wildPath,
-                    pathname,
-                  ),
-                  href: generatePath(
-                    absoluteRouteMap.children.org.children.projects.children
-                      .agents.children.environment.children.security.path,
-                    { orgId, projectId, agentId, envId: defaultEnv },
-                  ),
-                },
-              ]
-            : []),
-        ],
-      },
+      ...agentSecuritySections,
       {
         title: "Observability",
         type: "section",
@@ -804,9 +791,12 @@ export function useNavigationItems(): Array<
           pathname,
         ),
       },
-      ...(navVisibility.identityUsers ||
-      navVisibility.identityRoles ||
-      navVisibility.identityGroups
+      // Settings is shown only when profile management is enabled, and then only if RBAC
+      // grants access to at least one of its identity surfaces.
+      ...(globalConfig.featureFlags?.enableProfileManagement === true &&
+      (navVisibility.identityUsers ||
+        navVisibility.identityRoles ||
+        navVisibility.identityGroups)
         ? [
             {
               label: "Settings",
@@ -904,7 +894,7 @@ export function useNavigationItems(): Array<
             },
           ]
         : []),
-      ...(navVisibility.agentIdentities
+      ...(agentIdEnabled && navVisibility.agentIdentities
         ? [
             {
               title: "Agent Identities",

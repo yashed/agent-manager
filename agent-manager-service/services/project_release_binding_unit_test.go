@@ -203,6 +203,14 @@ func TestPromoteAgent_BindingFailureAbortsBeforeAnyTargetWrite(t *testing.T) {
 	configUpserted := false
 
 	ocClient := &clientmocks.OpenChoreoClientMock{
+		ReplaceReleaseBindingWorkloadOverridesFunc: func(_ context.Context, _, _, _ string, _ []client.EnvVar, _ []client.FileVar) error {
+			return nil
+		},
+		// The deploy/promote pre-flight reads the component's reconcile conditions;
+		// an unblocked component keeps this test on the path it actually covers.
+		GetComponentReconcileBlockFunc: func(_ context.Context, _, _ string) (*client.ComponentReconcileBlock, error) {
+			return nil, nil //nolint:nilnil // documented contract: a nil block means "not blocked"
+		},
 		GetOrganizationFunc: func(_ context.Context, name string) (*models.OrganizationResponse, error) {
 			return &models.OrganizationResponse{Name: name}, nil
 		},
@@ -265,6 +273,14 @@ func TestDeployAgent_BindingFailureAbortsDeploy(t *testing.T) {
 	boom := errors.New("openchoreo unavailable")
 	deployCalled := false
 	ocClient := &clientmocks.OpenChoreoClientMock{
+		ReplaceReleaseBindingWorkloadOverridesFunc: func(_ context.Context, _, _, _ string, _ []client.EnvVar, _ []client.FileVar) error {
+			return nil
+		},
+		// The deploy/promote pre-flight reads the component's reconcile conditions;
+		// an unblocked component keeps this test on the path it actually covers.
+		GetComponentReconcileBlockFunc: func(_ context.Context, _, _ string) (*client.ComponentReconcileBlock, error) {
+			return nil, nil //nolint:nilnil // documented contract: a nil block means "not blocked"
+		},
 		GetOrganizationFunc: func(_ context.Context, name string) (*models.OrganizationResponse, error) {
 			return &models.OrganizationResponse{Name: name}, nil
 		},
