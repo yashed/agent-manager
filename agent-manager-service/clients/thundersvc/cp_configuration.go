@@ -32,8 +32,10 @@ import (
 // maxCPResponseBytes bounds a CP response.
 const maxCPResponseBytes int64 = 1 << 20
 
-const cpApplyPollInterval = 250 * time.Millisecond
-const cpActivationTimeout = 60 * time.Second
+const (
+	cpApplyPollInterval = 250 * time.Millisecond
+	cpActivationTimeout = 60 * time.Second
+)
 
 // CPRequestError is a CP management request the CP answered with a non success
 // status. It carries the status only, never the response body.
